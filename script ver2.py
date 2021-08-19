@@ -11,7 +11,6 @@ from joblib import Memory
 import scipy.optimize as sp_opt
 import custom_minimizer 
 memory = Memory(cachedir, verbose=0)
-memory.clear()
 pi = np.pi
 t0 = time.time()
 
@@ -34,6 +33,8 @@ substrate_y_res = 0.05 # Substrate y resolution, 1/mm
 
 cores = 4 # number of jobs for paralleling
 verbose = True # True: print message each time when function of deposition called
+delete_cache = True # True: delete history of function evaluations in the beggining 
+                    #of work. Warning: if = False, some changes in the code may be ignored
 point_tolerance = 5/100 # needed relative tolerance for thickness in each point
 max_angle_divisions = 10 # limit of da while integration = 1 degree / max_angle_divisions
 
@@ -164,6 +165,8 @@ def print_fun(x, f, accepted):
 '''
 ####GEOMETRY + INITIALIZATION####
 '''
+if delete_cache: memory.clear(warn=False)
+else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
 F_axial = False
 deposition_offset_x = -deposition_len_x/2 # mm
 deposition_offset_y = -deposition_len_y/2 # mm
