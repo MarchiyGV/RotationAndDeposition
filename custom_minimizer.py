@@ -3,6 +3,57 @@ import scipy
 import numpy
 import scipy.optimize as sp_opt
 
+class MyTakeStep:
+   def __init__(self, R_max_step, k_max_step, NR_max_step, R_min_step, 
+                k_min_step, NR_min_step, R_bounds, k_bounds, NR_bounds):
+       self.R_max_step = R_max_step
+       self.k_max_step = k_max_step
+       self.NR_max_step = NR_max_step
+       self.R_min_step = R_min_step
+       self.k_min_step = k_min_step
+       self.NR_min_step = NR_min_step
+       self.R_bounds = R_bounds
+       self.k_bounds = k_bounds
+       self.NR_bounds = NR_bounds
+   def __call__(self, x):
+       R_1 = self.R_min_step
+       k_1 = self.k_min_step
+       R_2 = self.R_max_step
+       k_2 = self.k_max_step
+       NR_1 = self.NR_min_step
+       NR_2 = self.NR_max_step
+       print('R = %.1f, k = %.2f, NR = %.2f' % tuple(x))
+       while True:
+           d = numpy.random.uniform(R_1, R_2)*numpy.random.choice([1,-1])
+           if d+x[0]>=self.R_bounds[0] and d+x[0]<self.R_bounds[1]:
+               x[0] += d
+               print('MC switch: dR = %.1f' % d)
+               while True:
+                   d = numpy.random.uniform(k_1, k_2)*numpy.random.choice([1,-1])
+                   if d+x[1]>=self.k_bounds[0] and d+x[1]<self.k_bounds[1]:
+                       x[1] += d
+                       print('MC switch: dk = %.2f' % d)
+                       while True:
+                           d = numpy.random.uniform(NR_1, NR_2)*numpy.random.choice([1,-1])
+                           if d+x[2]>=self.NR_bounds[0] and d+x[2]<self.NR_bounds[1]:
+                               x[2] += d
+                               print('MC switch: dNR = %.2f' % d)
+                               break
+                       print('new: R = %.1f, k = %.2f, NR = %.2f' % tuple(x))
+                       break
+               break
+       return x
+   
+class MyBounds:
+    def __init__(self, R_bounds, k_bounds, NR_bounds):
+        self.xmax = numpy.array((R_bounds[1], k_bounds[1], NR_bounds[1]))
+        self.xmin = numpy.array((R_bounds[0], k_bounds[0], NR_bounds[0]))
+    def __call__(self, **kwargs):
+        x = kwargs["x_new"]
+        tmax = bool(numpy.all(x <= self.xmax))
+        tmin = bool(numpy.all(x >= self.xmin))
+        return tmax and tmin
+
 def wrap_function(function, args):
     ncalls = [0]
     if function is None:
