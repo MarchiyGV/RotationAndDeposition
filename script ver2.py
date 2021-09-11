@@ -22,7 +22,7 @@ t0 = time.time()
 #sputter_profile = 'ExpData/depline_exp_130mm.mat'
 filename = 'depz.txt'
 C = 4.46 #thickness [nm] per minute
-source = 1 #Choose source of get thickness data 1 - seimtra, 0 - experiment
+source = 0 #Choose source of get thickness data 1 - seimtra, 0 - experiment
 val = 3 #1, 2, 3 - magnetron position
 
 alpha0_sub = 0*pi
@@ -31,7 +31,7 @@ substrate_y_len = 100 # Substrate length, mm
 substrate_x_res = 0.05 # Substrate x resolution, 1/mm
 substrate_y_res = 0.05 # Substrate y resolution, 1/mm
 
-cores = 4 # number of jobs for paralleling
+cores = 1 # number of jobs for paralleling
 verbose = True # True: print message each time when function of deposition called
 delete_cache = True # True: delete history of function evaluations in the beggining 
                     #of work. Warning: if = False, some changes in the code may be ignored
@@ -45,7 +45,7 @@ deposition_len_y = 290 # mm
 deposition_res_x = 1 # 1/mm
 deposition_res_y = 1 # 1/mm
 
-R_bounds = (10, 70) # (min, max) mm
+R_bounds = (10, 60) # (min, max) mm
 k_bounds = (1, 50) # (min, max)
 NR_bounds = (1, 100)
 x0 = [35, 4.1, 1] #initial guess for optimisation [R0, k0]
@@ -71,7 +71,7 @@ NR_mc_interval = 15/100
 R_min_step = 1 #step for MC >= R_min_step
 k_min_step = 0.01 #step for MC >= k_min_step
 NR_min_step = 1
-mc_iter = 2 # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
+mc_iter = 0 # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
 T = 2 #"temperature" for MC algoritm
 
 ''' 
@@ -163,19 +163,23 @@ substrate_rect_y = [substrate_coords_y.max(), substrate_coords_y.max(),
                     substrate_coords_y.min(), substrate_coords_y.min(), 
                     substrate_coords_y.max()]
 
+rho = np.sqrt(sqr(substrate_coords_map_x) + sqr(substrate_coords_map_y))
+alpha0 = np.arctan2(substrate_coords_map_y, substrate_coords_map_x)
+#ind = [(i, j) for i in range(len(substrate_coords_map_x)) for j in range(len(substrate_coords_map_x[i]))]
+ind = [(i, len(substrate_coords_map_x[0])//2) for i in range(len(substrate_coords_map_x))]
+ind = ind + [(len(substrate_coords_map_x)//2, i) for i in range(len(substrate_coords_map_x[0]))]
+
 plt.plot(substrate_rect_x, substrate_rect_y, color='black')
 
 plt.plot(np.reshape(substrate_coords_map_x, (-1, 1)), 
          np.reshape(substrate_coords_map_y, (-1, 1)), 'x', label='mesh point')
 
+
+
 plt.title('Substrate')
 plt.xlabel('x, mm')
 plt.ylabel('y, mm')
 plt.show()
-
-rho = np.sqrt(sqr(substrate_coords_map_x) + sqr(substrate_coords_map_y))
-alpha0 = np.arctan2(substrate_coords_map_y, substrate_coords_map_x)
-ind = [(i, j) for i in range(len(substrate_coords_map_x)) for j in range(len(substrate_coords_map_x[i]))]
 
 def xyp(i, j, a, R, k):
     x = R*np.cos(a+alpha0_sub)+rho[i,j]*np.cos(-a*k + alpha0[i,j])
@@ -246,11 +250,12 @@ elif cores==1:
                 raise ValueError('Incorrect substate out of holder border.')
         ########### INTEGRATION #################
         I, I_err = zip(*[calc(ij, R, k, NR, omega) for ij in ind]) #serial
-        I = np.reshape(I, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
-        I_err = np.reshape(I_err, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
-        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-        heterogeneity = max(h_1, h_2)*100
+        I = np.array(I)
+        #I = np.reshape(I, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
+        #I_err = np.reshape(I_err, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
+        #h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
+        #h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
+        heterogeneity = (1-I.min()/I.max())*100
         t1 = time.time()
         time_f.append(t1-t0)
         if verbose: print('%d calculation func called. computation time: %.1f s' % (len(time_f), time_f[-1]))
@@ -279,13 +284,13 @@ def func(x):
         print('At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h))
     return c+h
 
-mytakestep = MyTakeStep((R_bounds[1]-R_bounds[0])*R_mc_interval, 
+mytakestep = custom_minimizer.CustomTakeStep((R_bounds[1]-R_bounds[0])*R_mc_interval, 
                         (k_bounds[1]-k_bounds[0])*k_mc_interval, 
                         (NR_bounds[1]-NR_bounds[0])*NR_mc_interval, 
                         R_min_step, k_min_step, NR_min_step, 
                         R_bounds, k_bounds, NR_bounds)
 
-mybounds = MyBounds(R_bounds, k_bounds, NR_bounds)
+mybounds = custom_minimizer.CustomBounds(R_bounds, k_bounds, NR_bounds)
 
 ret = sp_opt.basinhopping(func, x0, minimizer_kwargs=minimizer, niter=mc_iter, 
                           callback=print_fun, take_step=mytakestep, T=T, 

@@ -3,7 +3,7 @@ import scipy
 import numpy
 import scipy.optimize as sp_opt
 
-class MyTakeStep:
+class CustomTakeStep:
    def __init__(self, R_max_step, k_max_step, NR_max_step, R_min_step, 
                 k_min_step, NR_min_step, R_bounds, k_bounds, NR_bounds):
        self.R_max_step = R_max_step
@@ -44,7 +44,7 @@ class MyTakeStep:
                break
        return x
    
-class MyBounds:
+class CustomBounds:
     def __init__(self, R_bounds, k_bounds, NR_bounds):
         self.xmax = numpy.array((R_bounds[1], k_bounds[1], NR_bounds[1]))
         self.xmin = numpy.array((R_bounds[0], k_bounds[0], NR_bounds[0]))

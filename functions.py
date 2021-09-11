@@ -1,7 +1,6 @@
 import numpy as np
 import numpy.matlib
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 from scipy import interpolate
 import time
 import scipy.integrate as integrate
@@ -168,7 +167,7 @@ class Model:
                                           deposition_offset_y+deposition_len_y, 
                                           num=math.ceil(deposition_len_y*deposition_res_y))
         
-        deposition_coords_map_x, deposition_coords_map_y = np.meshgrid(deposition_coords_x, 
+        self.deposition_coords_map_x, self.deposition_coords_map_y = np.meshgrid(deposition_coords_x, 
                                                                        deposition_coords_y)
         
         substrate_coords_x = np.linspace(-substrate_x_len/2, substrate_x_len/2, 
@@ -195,12 +194,11 @@ class Model:
         self.ind = [(i, j) for i in range(len(self.substrate_coords_map_x)) for j in range(len(self.substrate_coords_map_x[i]))]
         #self.ind = [(i, len(self.substrate_coords_map_x[0])//2) for i in range(len(self.substrate_coords_map_x))]
         #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
-        self.plot_mesh()
         
         if source == 1:
             RELdeposition_coords_map_z = np.rot90(np.loadtxt(filename, skiprows=1))
             row_dep = RELdeposition_coords_map_z.max()
-            deposition_coords_map_z = C*(RELdeposition_coords_map_z/row_dep)
+            self.deposition_coords_map_z = C*(RELdeposition_coords_map_z/row_dep)
         elif source == 0: 
             if val == 1:
                 center_x, center_y = 80, 59
@@ -209,15 +207,15 @@ class Model:
             elif val == 3:
                 center_x, center_y = -105.8, 0
             else:
-                raise ValueError('Incorrect magnetron position.')
-            deposition_coords_map_z, self.F = dep_profile(deposition_coords_map_x, 
-                                                     deposition_coords_map_y, 
+                raise ValueError(f'Incorrect magnetron position {val}.')
+            self.deposition_coords_map_z, self.F = dep_profile(self.deposition_coords_map_x, 
+                                                     self.deposition_coords_map_y, 
                                                      center_x, center_y, C)
             self.F_axial = True
         
         if not self.F_axial:
             self.F = interpolate.RegularGridInterpolator((deposition_coords_x, deposition_coords_y), 
-                                                    np.transpose(deposition_coords_map_z), 
+                                                    np.transpose(self.deposition_coords_map_z), 
                                                     bounds_error=False)
         self.time_f = []
         if cores>1:
@@ -260,19 +258,6 @@ class Model:
         if accepted == 1: s = 'accepted'
         else: s = 'rejected' 
         print("\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.count, self.mc_iter, f, *x, s))
-       
-    def plot_mesh(self):
-        fig = Figure()
-        ax1f = fig.add_subplot(111)
-        ax1f.plot(self.substrate_rect_x, self.substrate_rect_y, color='black')
-
-        ax1f.plot(np.reshape(self.substrate_coords_map_x, (-1, 1)), 
-                   np.reshape(self.substrate_coords_map_y, (-1, 1)), 'x', 
-                   label='mesh point')
-        ax1f.set_title('Substrate')
-        ax1f.set_xlabel('x, mm')
-        ax1f.set_ylabel('y, mm')
-        return fig
 
     def xyp(self, i, j, a, R, k):
         x = R*np.cos(a+self.alpha0_sub)+self.rho[i,j]*np.cos(-a*k + self.alpha0[i,j])
