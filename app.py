@@ -297,12 +297,3 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
         ax1f.set_title(f'Film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
     
-
-def main():
-    app = QtWidgets.QApplication(sys.argv)  
-    window = App() 
-    window.show()  # Показываем окно
-    sys.exit(app.exec_())
-    print('exit')
-if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
-    main()  # то запускаем функцию main()
