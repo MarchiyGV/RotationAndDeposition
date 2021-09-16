@@ -1,6 +1,5 @@
 import numpy as np
 import numpy.matlib
-import matplotlib.pyplot as plt
 from scipy import interpolate
 import time
 import scipy.integrate as integrate
@@ -68,10 +67,18 @@ class Model:
                  deposition_len_y = 290, # mm
                  deposition_res_x = 1, # 1/mm
                  deposition_res_y = 1, # 1/mm
-                 R_bounds = (10, 70), # (min, max) mm
-                 k_bounds = (1, 50), # (min, max)
-                 NR_bounds = (1, 100),
-                 x0 = [35, 4.1, 1], #initial guess for optimisation [R0, k0]
+                 R_step = 1, #mm
+                 k_step = 0.01,
+                 NR_step = 0.01,
+                 R_min = 10, # mm
+                 R_max = 70,
+                 k_min = 1, 
+                 k_max = 50, 
+                 NR_min = 1,
+                 NR_max = 100,
+                 x0_1 = 35, #initial guess for optimisation [R0, k0]
+                 x0_2 = 4.1,
+                 x0_3 = 1,
                  minimizer = 'NM_custom',
                  R_mc_interval = 5/100, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
                  k_mc_interval = 5/100, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
@@ -108,10 +115,13 @@ class Model:
         self.deposition_len_y = deposition_len_y # mm
         self.deposition_res_x = deposition_res_x # 1/mm
         self.deposition_res_y = deposition_res_y # 1/mm
-        self.R_bounds = R_bounds # (min, max) mm
-        self.k_bounds = k_bounds # (min, max)
-        self.NR_bounds = NR_bounds
-        self.x0 = x0 #initial guess for optimisation [R0, k0]
+        self.R_step = R_step
+        self.k_step = k_step
+        self.NR_step = NR_step
+        self.R_bounds = (R_min, R_max) # (min, max) mm
+        self.k_bounds = (k_min, k_max) # (min, max)
+        self.NR_bounds = (NR_min, NR_max)
+        self.x0 = [x0_1, x0_2, x0_3] #initial guess for optimisation [R0, k0]
         NM = {"method":"Nelder-Mead", "options":{"disp": True, "xatol":0.01, 
                                                  "fatol":0.01, 'maxfev':200}, 
                                                  "bounds":(self.R_bounds, self.k_bounds, self.NR_bounds)}

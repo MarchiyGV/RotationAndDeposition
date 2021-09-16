@@ -1,49 +1,32 @@
-import sys  # sys нужен для передачи argv в QApplication
-from PyQt5 import QtWidgets, QtCore
-from PyQt5.QtCore import QModelIndex, Qt
-import design
+#from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel, QAbstractTableModel, pyqtSlot, QAbstractItemModel
+from PyQt5.QtGui import QStandardItem, QStandardItemModel
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QStyledItemDelegate,
+    QTableView,
+    QWidget,
+    QMainWindow,
+    QInputDialog,
+    QFileDialog
+)
+
 import matplotlib
 matplotlib.use('QT5Agg')
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 import numpy as np
+import pandas as pd
+import re
+import os
+import design
 import functions 
+
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 
-settings = [['Путь', 'filename', 'depz.txt', 'filename', 'path to dep profile'],
-            ['Скорость осаждения', 'C', 4.46, '+float', 'thickness [nm] per minute'],
-            ['source', 'source', 0, [0, 1], 'Choose source of get thickness data 1 - seimtra, 0 - experiment'],
-            ['val', 'val', 3, [1, 2, 3], '1, 2, 3 - magnetron position'],
-            ['Длина подложки', 'substrate_x_len', 100, '+float', 'Substrate width, mm'],
-            ['Ширина подложки', 'substrate_y_len', 100, '+float', 'Substrate length, mm'],
-            ['Разрешение по х', 'substrate_x_res', 0.05, '+float', 'Substrate x resolution, 1/mm'],
-            ['Разрешение по у', 'substrate_y_res', 0.05, '+float', 'Substrate y resolution, 1/mm'],
-            ['Число ядер', 'cores', 1, '+int', 'number of jobs for paralleling'],
-            ['Подробный лог', 'verbose', True, [True, False], 'True: print message each time when function of deposition called'],
-            ['Стирать кэш', 'delete_cache', True, [True, False], 'True: delete history of function evaluations in the beggining of work. Warning: if = False, some changes in the code may be ignored'],
-            ['Точность в точке', 'point_tolerance', 5/100, '+float', 'needed relative tolerance for thickness in each point'],
-            ['Максимальный шаг по углу', 'max_angle_divisions', 10, '+int', 'limit of da while integration = 1 degree / max_angle_divisions'],
-            ['holder_inner_radius', 'holder_inner_radius', 20, '+float', 'mm'],
-            ['holder_outer_radius', 'holder_outer_radius', 145, '+float', 'mm'],
-            ['deposition_len_x', 'deposition_len_x', 290, '+float', 'mm'],
-            ['deposition_len_y', 'deposition_len_y', 290, '+float', 'mm'],
-            ['Разрешение по х источника', 'deposition_res_x', 1, '+float', '1/mm'],
-            ['Разрешение по у источника', 'deposition_res_y', 1, '+float', '1/mm'],
-            ['Границы R', 'R_bounds', (10, 70), ('+float','+float') , '(min, max) mm'],
-            ['Границы k', 'k_bounds', (1, 50), ('+float','+float'), '(min, max)'],
-            ['Границы числа поворотов', 'NR_bounds', (1, 100), ('+float','+float'), ''],
-            ['Начальное приближение', 'x0', [35, 4.1, 1], ('+float','+float', '+float'),'initial guess for optimisation [R0, k0]'],
-            ['Алгоритм минимизации', 'minimizer', 'NM_custom', ['NM_custom', 'NM', 'Powell'], ''],
-            ['Средний МК шаг по R', 'R_mc_interval', 5/100, '%100', 'step for MC <= R_mc_interval*(R_max_bound-R_min_bound)'],
-            ['Средний МК шаг по k', 'k_mc_interval', 5/100, '%100', 'step for MC <= k_mc_interval*(k_max_bound-k_min_bound)'],
-            ['Средний МК шаг по числу оборотов', 'NR_mc_interval', 15/100, '%100', ''],
-            ['Мин. МК шаг по R', 'R_min_step', 1, '0+float', 'step for MC >= R_min_step'],
-            ['Мин. МК шаг по k', 'k_min_step', 0.01, '0+float', 'step for MC >= k_min_step'],
-            ['Мин. МК шаг по числу оборотов', 'NR_min_step', 1, '0+float', ''],
-            ['Число МК итераций', 'mc_iter', 2, '+int', 'number of Monte-Carlo algoritm"s iterations (number of visited local minima)'],
-            ['МК температура', 'T', 2, '+float', '"temperature" for MC algoritm']]
 
-class Settings(QtCore.QAbstractTableModel):
+class Settings(QAbstractTableModel):
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
         self.data = data
@@ -51,32 +34,39 @@ class Settings(QtCore.QAbstractTableModel):
         self.index_variableName = 1
         self.index_value = 2
         self.index_type = 3
-        self.index_comment = 4 
-        self.headers = ['Параметр', 'Значение']
+        self.index_group = 4
+        self.index_comment = 5 
+        self.indexes_visible = [self.index_name, self.index_value]
+        self.headers = ['Параметр', 'Переменная', 'Значение', 'Тип', 'Группа', 'Комментарий']
+         
 
+    def save(self, filename):
+        df = pd.DataFrame(self.data)
+        df.to_excel(filename+'.xlsx')
+        
     def headerData(self, section: int, orientation: Qt.Orientation, role: int):
-        if role == QtCore.Qt.DisplayRole:
+        if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 return self.headers[section]
             else:
                 return str(1+section)
 
     def columnCount(self, parent=None):
-        return 2
+        return len(self.data[0])
 
     def rowCount(self, parent=None):
         return len(self.data)
     
     def data(self, index: QModelIndex, role: int):
-        if role == QtCore.Qt.DisplayRole:
+        if role == Qt.ToolTipRole:
+            row=index.row()
+            return self.data[row][self.index_comment]
+        if role == Qt.DisplayRole or role == Qt.EditRole:
             row = index.row()
-            if index.column() == 0:
-                col = self.index_name
-            elif index.column() == 1:
-                col = self.index_value
+            col = index.column()
             return str(self.data[row][col])
         
-    def settigs(self):
+    def wrap(self):
         j = self.index_variableName
         k = self.index_value
         return {self.data[i][j]: self.data[i][k] for i in range(len(self.data))}
@@ -86,9 +76,9 @@ class Settings(QtCore.QAbstractTableModel):
         return settings[key]
         
     def flags(self, index):
-        if index.column()==1:
+        if index.column()==self.index_value:
             return Qt.ItemIsEnabled | Qt.ItemIsEditable
-        if index.column()==0:
+        if index.column()==self.index_name:
             return Qt.ItemIsEnabled
 
     def setData(self, index, value, role):
@@ -107,82 +97,151 @@ class Settings(QtCore.QAbstractTableModel):
             try: value = float(value)
             except: flag = False
             flag = flag and (value > 0)
-            return value, flag
-        if value_type == '0+float':
+        elif value_type == '0+float':
             try: value = float(value)
             except: flag = False
             flag = flag and (value >= 0)
-            return value, flag
-        if value_type == '+int':
-            print(value)
+        elif value_type == '+int':
             try: value = int(float(value))
             except: flag = False
             flag = flag and (value > 0)
-            print(flag)
-            return value, flag
-        if value_type == '%100':
+        elif value_type == '%100':
             try: value = float(value)
             except: flag = False
             flag = flag and (value >= 0) and (value <= 1)
-            return value, flag
-        if type(value_type)==tuple:
-            for i, val_type in enumerate(value_type):
-                if val_type == '+float':
-                    try: value[i] = float(value[i])
-                    except: flag = False
-                flag = flag and (value[i] > 0)
-            return value, flag
-        if type(value_type)==list:
+        elif value_type == 'bool':
+            if value == 'True':
+                value = True
+            elif value == 'False':
+                value = False
+            elif (value == 0 or value == 1): 
+                value = bool(value)
+            else:
+                flag = False
+        elif re.match('cases', value_type):
+            '''
+            d = {}
+            exec(value_type, d) # cases = [..., ..., ...]
+            value_type = d['cases']
             flag = (value in value_type)
-            if (not flag) and type(value_type[0])==int:
-                try: value = int(float(value))
-                except: pass
-                flag = (value in value_type)
-            return value, flag
-        if value_type == 'filename':
-            try: value = str(value)
-            except: flag = False
-            flag = flag and ('.' in value)
-            return value, flag
+            '''
+            print(value)
+        elif value_type == 'filename':
+            value = str(value)
+            t = re.match('.+\\..+', value)
+            if t:
+                value = t.group(0)
+            else: 
+                flag = False
         else:
-            print('incorrect value')
-            return value, False
+            print(f'incorrect value {value} ({type(value)})')
+            flag = False
+        return value, flag 
+    
+class DropboxDelegate(QStyledItemDelegate):
+    def __init__(self, wiget, items):
+        super().__init__(wiget)
+        self.items = items
         
-class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.addItems(self.items)
+        combo.currentIndexChanged.connect(self.currentIndexChanged)
+        return combo
+        
+    def setEditorData(self, editor, index):
+        editor.blockSignals(True)
+        editor.setCurrentIndex(int(index.model().data(index)))
+        editor.blockSignals(False)
+        
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentIndex())
+        
+    @pyqtSlot()
+    def currentIndexChanged(self):
+        self.commitData.emit(self.sender())
+        
+class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
-        self.f = False
         self.DepositionButton.clicked.connect(self.deposition)
+        self.actionenter.triggered.connect(self.deposition)
         self.update_model_Button.clicked.connect(self.update_model)
-        self.settings_input = Settings(settings)
-        self.table_settings.setModel(self.settings_input)
-        self.update_model()
+        self.save_settings_Button.clicked.connect(self.save_settings)
+        self.open_settings_Button.clicked.connect(self.open_settings)
+        self.save_path = 'saves/'
+        settings = pd.read_excel(self.save_path+'settings.xlsx', index_col=0)
+        self.update_settings(settings)
+        self.set_delegates(self.table_settings)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
         self.k_Slider.valueChanged.connect(self.set_k_slider)
         self.NR_Slider.valueChanged.connect(self.set_NR_slider)
-        self.R_step = 1
-        self.k_step = 0.01
-        self.NR_step = 0.01
-        self.R_Slider.setRange(*np.multiply(self.model.R_bounds, 1/self.R_step))
-        self.k_Slider.setRange(*np.multiply(self.model.k_bounds, 1/self.k_step))
-        self.NR_Slider.setRange(*np.multiply(self.model.NR_bounds, 1/self.NR_step))
+        self.update_model()
         self.R_disp.editingFinished.connect(self.set_R_line)
         self.k_disp.editingFinished.connect(self.set_k_line)
         self.NR_disp.editingFinished.connect(self.set_NR_line)
-        self.R_Slider.setValue(self.R/self.R_step)
-        self.k_Slider.setValue(self.k/self.k_step)
-        self.NR_Slider.setValue(self.NR/self.NR_step)
-        self.set_R(20)
+        self.set_R(25)
         self.set_k(1.5)
         self.set_NR(1)
+        
+    def set_delegates(self, table_view):
+        l = 0
+        while self.model_settings.index(l,self.settings.index_type).isValid():
+           l+=1
+        for i in range(l):
+            items = self.model_settings.itemData(self.model_settings.index(i,self.settings.index_type))[self.settings.index_type-1]
+            if 'cases' in items:
+                d = {}
+                exec(items, d) # cases = [..., ..., ...]
+                items = d['cases']
+                for j, item in enumerate(items):
+                    items[j] = str(item)
+                table_view.setItemDelegateForRow(i, DropboxDelegate(table_view, items))
+        
+    def update_settings(self, settings):
+        self.settings = Settings(np.array(settings, dtype=object))
+        self.model_settings = QSortFilterProxyModel()
+        self.model_settings.setSourceModel(self.settings)
+        self.model_settings.setFilterKeyColumn(self.settings.index_group)
+        self.model_settings.setFilterRegExp('(model)|(sys)|(numerical)')
+        self.model_settings.sort(self.settings.index_group, Qt.DescendingOrder)
+        self.table_settings.setModel(self.model_settings)
+        for i in range(self.settings.columnCount()):
+            self.table_settings.setColumnHidden(i, (not i in self.settings.indexes_visible))
+        self.table_settings.verticalHeader().setVisible(False)
+        self.table_settings.resizeColumnsToContents()
+        
+    def save_settings(self):
+        name, flag = QInputDialog.getText(self, 'Input Dialog',
+            'File name:')
+        if flag:
+            self.update_model()
+            self.settings.save(self.save_path+name)
+        
+    def open_settings(self):
+        fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
+        settings = pd.read_excel(fname, index_col=0)
+        self.update_settings(settings)
+        self.update_model()
+        
+    def update_sliders(self):
+        self.R_Slider.setRange(*np.multiply(self.model.R_bounds, 1/self.model.R_step).astype(int))
+        self.k_Slider.setRange(*np.multiply(self.model.k_bounds, 1/self.model.k_step).astype(int))
+        self.NR_Slider.setRange(*np.multiply(self.model.NR_bounds, 1/self.model.NR_step).astype(int))
+        self.R_disp.setDecimals(int(np.log10(1/self.model.R_step)))
+        self.R_disp.setSingleStep(self.model.R_step)
+        self.k_disp.setSingleStep(self.model.k_step)
+        self.NR_disp.setSingleStep(self.model.NR_step)
+        self.k_disp.setDecimals(int(np.log10(1/self.model.k_step)))
+        self.NR_disp.setDecimals(int(np.log10(1/self.model.NR_step)))
         
     def set_R_line(self):
         self.R = float(self.R_disp.text())
         self.set_R()
         
     def set_R_slider(self):
-        self.R = float(self.R_Slider.value())*self.R_step
+        self.R = float(self.R_Slider.value())*self.model.R_step
         self.set_R()
         
     def set_R(self, value=None):
@@ -190,16 +249,15 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
             value = self.R
         else:
             self.R = value
-        self.lcd_R.display(self.R)
-        self.R_disp.setText(('%.'+str(int(np.log10(1/self.R_step)))+'f') % self.R)
-        self.R_Slider.setValue(self.R/self.R_step)
+        self.R_disp.setValue(self.R)
+        self.R_Slider.setValue(int(self.R/self.model.R_step))
         
     def set_k_line(self):
         self.k = float(self.k_disp.text())
         self.set_k()
         
     def set_k_slider(self):
-        self.k = float(self.k_Slider.value())*self.k_step
+        self.k = float(self.k_Slider.value())*self.model.k_step
         self.set_k()
         
     def set_k(self, value=None):
@@ -207,16 +265,15 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
             value = self.k
         else:
             self.k = value
-        self.lcd_k.display(self.k)
-        self.k_disp.setText(('%.'+str(int(np.log10(1/self.k_step)))+'f') % self.k)
-        self.k_Slider.setValue(self.k/self.k_step)
+        self.k_disp.setValue(self.k)
+        self.k_Slider.setValue(int(self.k/self.model.k_step))
         
     def set_NR_line(self):
         self.NR = float(self.NR_disp.text())
         self.set_NR()
         
     def set_NR_slider(self):
-        self.NR = float(self.NR_Slider.value())*self.NR_step
+        self.NR = float(self.NR_Slider.value())*self.model.NR_step
         self.set_NR()
         
     def set_NR(self, value=None):
@@ -224,13 +281,13 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
             value = self.NR
         else:
             self.NR = value
-        self.lcd_NR.display(self.NR)
-        self.NR_disp.setText(('%.'+str(int(np.log10(1/self.NR_step)))+'f') % self.NR)
-        self.NR_Slider.setValue(self.NR/self.NR_step)
+        self.NR_disp.setValue(self.NR)
+        self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
         
     def update_model(self):
-        settings = self.settings_input.settigs()
+        settings = self.settings.wrap()
         self.model = functions.Model(**settings)
+        self.update_sliders()
         try: 
             self.mesh_plot_vl.canvas.figure.axes[0].cla()
             self.source_plot_vl.canvas.figure.axes[0].cla()
@@ -239,13 +296,13 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
             self.mesh_plot_vl.canvas = FigureCanvas(fig1)
             self.mesh_plot_vl.addWidget(self.mesh_plot_vl.canvas)
             toolbar1 = NavigationToolbar(self.mesh_plot_vl.canvas, self.mesh_plot)
-            self.mesh_plot_vl.addWidget(toolbar1)
+            #self.mesh_plot_vl.addWidget(toolbar1)
             self.mesh_plot_vl.canvas.figure.add_subplot(111)
             fig2 = Figure()
             self.source_plot_vl.canvas = FigureCanvas(fig2)
             self.source_plot_vl.addWidget(self.source_plot_vl.canvas)
             toolbar2 = NavigationToolbar(self.source_plot_vl.canvas, self.source_plot)
-            self.source_plot_vl.addWidget(toolbar2)
+            #self.source_plot_vl.addWidget(toolbar2)
             self.source_plot_vl.canvas.figure.add_subplot(111)
         ax1 = self.mesh_plot_vl.canvas.figure.axes[0]
         ax1.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, color='black')
@@ -297,3 +354,13 @@ class App(QtWidgets.QMainWindow, design.Ui_MainWindow):
         ax1f.set_title(f'Film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
     
+def main():
+    print('app = main')
+    app = QApplication(sys.argv)  
+    window = App() 
+    window.show()  # Показываем окно
+    sys.exit(app.exec_())
+    
+if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
+    import sys
+    main()  # то запускаем функцию main()

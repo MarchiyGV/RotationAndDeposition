@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Thickness calculator</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
@@ -30,253 +30,263 @@
        <attribute name="title">
         <string>Модель</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout">
-        <item row="1" column="1">
-         <widget class="QWidget" name="source_plot" native="true">
-          <property name="minimumSize">
-           <size>
-            <width>400</width>
-            <height>300</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>600</width>
-            <height>450</height>
-           </size>
-          </property>
-          <layout class="QVBoxLayout" name="source_plot_vl"/>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QWidget" name="widget_3" native="true">
+          <layout class="QVBoxLayout" name="verticalLayout_2">
+           <item>
+            <widget class="QTableView" name="table_settings">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Ignored" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>400</width>
+               <height>530</height>
+              </size>
+             </property>
+             <property name="sizeAdjustPolicy">
+              <enum>QAbstractScrollArea::AdjustToContents</enum>
+             </property>
+             <property name="editTriggers">
+              <set>QAbstractItemView::AnyKeyPressed|QAbstractItemView::DoubleClicked|QAbstractItemView::EditKeyPressed|QAbstractItemView::SelectedClicked</set>
+             </property>
+             <property name="alternatingRowColors">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="open_settings_Button">
+             <property name="text">
+              <string>Загрузить настройки</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="save_settings_Button">
+             <property name="text">
+              <string>Сохранить настройки</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="update_model_Button">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Обновить модель</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QTableView" name="table_settings">
-          <property name="minimumSize">
-           <size>
-            <width>500</width>
-            <height>550</height>
-           </size>
-          </property>
-          <property name="alternatingRowColors">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QWidget" name="mesh_plot" native="true">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>400</width>
-            <height>300</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>600</width>
-            <height>450</height>
-           </size>
-          </property>
-          <layout class="QVBoxLayout" name="mesh_plot_vl"/>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QPushButton" name="update_model_Button">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>обновить модель</string>
-          </property>
+        <item>
+         <widget class="QWidget" name="widget_2" native="true">
+          <layout class="QVBoxLayout" name="verticalLayout">
+           <item>
+            <widget class="QWidget" name="mesh_plot" native="true">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>300</width>
+               <height>300</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>600</width>
+               <height>600</height>
+              </size>
+             </property>
+             <layout class="QVBoxLayout" name="mesh_plot_vl"/>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="source_plot" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>300</width>
+               <height>300</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>600</width>
+               <height>600</height>
+              </size>
+             </property>
+             <layout class="QVBoxLayout" name="source_plot_vl"/>
+            </widget>
+           </item>
+          </layout>
          </widget>
         </item>
        </layout>
       </widget>
       <widget class="QWidget" name="Deposition">
        <attribute name="title">
-        <string>Deposition</string>
+        <string>Напыление</string>
        </attribute>
-       <widget class="QPushButton" name="DepositionButton">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>170</y>
-          <width>112</width>
-          <height>34</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Deposition</string>
-        </property>
-       </widget>
-       <widget class="QWidget" name="film_plot" native="true">
-        <property name="geometry">
-         <rect>
-          <x>460</x>
-          <y>20</y>
-          <width>400</width>
-          <height>300</height>
-         </rect>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>400</width>
-          <height>300</height>
-         </size>
-        </property>
-        <layout class="QVBoxLayout" name="film_vl"/>
-       </widget>
-       <widget class="QSlider" name="R_Slider">
-        <property name="geometry">
-         <rect>
-          <x>50</x>
-          <y>30</y>
-          <width>160</width>
-          <height>21</height>
-         </rect>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-       <widget class="QSlider" name="k_Slider">
-        <property name="geometry">
-         <rect>
-          <x>50</x>
-          <y>70</y>
-          <width>160</width>
-          <height>22</height>
-         </rect>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-       <widget class="QSlider" name="NR_Slider">
-        <property name="geometry">
-         <rect>
-          <x>50</x>
-          <y>110</y>
-          <width>160</width>
-          <height>22</height>
-         </rect>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>30</y>
-          <width>21</width>
-          <height>19</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>R</string>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label_2">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>70</y>
-          <width>16</width>
-          <height>19</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>k</string>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label_3">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>110</y>
-          <width>21</width>
-          <height>19</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>NR</string>
-        </property>
-       </widget>
-       <widget class="QLCDNumber" name="lcd_R">
-        <property name="geometry">
-         <rect>
-          <x>220</x>
-          <y>30</y>
-          <width>64</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="smallDecimalPoint">
-         <bool>true</bool>
-        </property>
-       </widget>
-       <widget class="QLCDNumber" name="lcd_k">
-        <property name="geometry">
-         <rect>
-          <x>220</x>
-          <y>70</y>
-          <width>64</width>
-          <height>23</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QLCDNumber" name="lcd_NR">
-        <property name="geometry">
-         <rect>
-          <x>220</x>
-          <y>100</y>
-          <width>64</width>
-          <height>23</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="R_disp">
-        <property name="geometry">
-         <rect>
-          <x>290</x>
-          <y>30</y>
-          <width>51</width>
-          <height>25</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="k_disp">
-        <property name="geometry">
-         <rect>
-          <x>290</x>
-          <y>70</y>
-          <width>51</width>
-          <height>25</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="NR_disp">
-        <property name="geometry">
-         <rect>
-          <x>290</x>
-          <y>100</y>
-          <width>51</width>
-          <height>25</height>
-         </rect>
-        </property>
-       </widget>
+       <layout class="QGridLayout" name="gridLayout_3">
+        <item row="0" column="2">
+         <widget class="QWidget" name="film_plot" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+            <horstretch>1</horstretch>
+            <verstretch>1</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>400</width>
+            <height>400</height>
+           </size>
+          </property>
+          <layout class="QVBoxLayout" name="film_vl"/>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QWidget" name="widget" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+            <horstretch>1</horstretch>
+            <verstretch>1</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>400</width>
+            <height>300</height>
+           </size>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_2">
+           <item row="0" column="0">
+            <widget class="QLabel" name="label">
+             <property name="text">
+              <string>R</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QSlider" name="R_Slider">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QDoubleSpinBox" name="R_disp">
+             <property name="locale">
+              <locale language="English" country="UnitedStates"/>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::PlusMinus</enum>
+             </property>
+             <property name="decimals">
+              <number>0</number>
+             </property>
+             <property name="singleStep">
+              <double>1.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_2">
+             <property name="text">
+              <string>k</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QSlider" name="k_Slider">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="2">
+            <widget class="QDoubleSpinBox" name="k_disp">
+             <property name="locale">
+              <locale language="English" country="UnitedStates"/>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::PlusMinus</enum>
+             </property>
+             <property name="decimals">
+              <number>0</number>
+             </property>
+             <property name="singleStep">
+              <double>1.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_3">
+             <property name="text">
+              <string>NR</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QSlider" name="NR_Slider">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2">
+            <widget class="QDoubleSpinBox" name="NR_disp">
+             <property name="locale">
+              <locale language="English" country="UnitedStates"/>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::PlusMinus</enum>
+             </property>
+             <property name="decimals">
+              <number>0</number>
+             </property>
+             <property name="singleStep">
+              <double>1.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QPushButton" name="DepositionButton">
+             <property name="text">
+              <string>Напылить</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>
@@ -293,6 +303,14 @@
    </property>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionenter">
+   <property name="text">
+    <string>enter</string>
+   </property>
+   <property name="shortcut">
+    <string>Return</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>
