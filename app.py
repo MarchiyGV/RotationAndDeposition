@@ -16,8 +16,8 @@ import matplotlib
 matplotlib.use('QT5Agg')
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
-import numpy as np
-import pandas as pd
+from numpy import (array, multiply, log10, reshape)
+from pandas import (DataFrame, read_excel)
 import re
 import os
 import design
@@ -41,7 +41,7 @@ class Settings(QAbstractTableModel):
          
 
     def save(self, filename):
-        df = pd.DataFrame(self.data)
+        df = DataFrame(self.data)
         df.to_excel(filename+'.xlsx')
         
     def headerData(self, section: int, orientation: Qt.Orientation, role: int):
@@ -171,7 +171,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
         self.save_path = 'saves/'
-        settings = pd.read_excel(self.save_path+'settings.xlsx', index_col=0)
+        settings = read_excel(self.save_path+'settings.xlsx', index_col=0)
         self.update_settings(settings)
         self.set_delegates(self.table_settings)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
@@ -200,7 +200,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                 table_view.setItemDelegateForRow(i, DropboxDelegate(table_view, items))
         
     def update_settings(self, settings):
-        self.settings = Settings(np.array(settings, dtype=object))
+        self.settings = Settings(array(settings, dtype=object))
         self.model_settings = QSortFilterProxyModel()
         self.model_settings.setSourceModel(self.settings)
         self.model_settings.setFilterKeyColumn(self.settings.index_group)
@@ -221,20 +221,20 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     def open_settings(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
-        settings = pd.read_excel(fname, index_col=0)
+        settings = read_excel(fname, index_col=0)
         self.update_settings(settings)
         self.update_model()
         
     def update_sliders(self):
-        self.R_Slider.setRange(*np.multiply(self.model.R_bounds, 1/self.model.R_step).astype(int))
-        self.k_Slider.setRange(*np.multiply(self.model.k_bounds, 1/self.model.k_step).astype(int))
-        self.NR_Slider.setRange(*np.multiply(self.model.NR_bounds, 1/self.model.NR_step).astype(int))
-        self.R_disp.setDecimals(int(np.log10(1/self.model.R_step)))
+        self.R_Slider.setRange(*multiply(self.model.R_bounds, 1/self.model.R_step).astype(int))
+        self.k_Slider.setRange(*multiply(self.model.k_bounds, 1/self.model.k_step).astype(int))
+        self.NR_Slider.setRange(*multiply(self.model.NR_bounds, 1/self.model.NR_step).astype(int))
+        self.R_disp.setDecimals(int(log10(1/self.model.R_step)))
         self.R_disp.setSingleStep(self.model.R_step)
         self.k_disp.setSingleStep(self.model.k_step)
         self.NR_disp.setSingleStep(self.model.NR_step)
-        self.k_disp.setDecimals(int(np.log10(1/self.model.k_step)))
-        self.NR_disp.setDecimals(int(np.log10(1/self.model.NR_step)))
+        self.k_disp.setDecimals(int(log10(1/self.model.k_step)))
+        self.NR_disp.setDecimals(int(log10(1/self.model.NR_step)))
         
     def set_R_line(self):
         self.R = float(self.R_disp.text())
@@ -306,8 +306,8 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.source_plot_vl.canvas.figure.add_subplot(111)
         ax1 = self.mesh_plot_vl.canvas.figure.axes[0]
         ax1.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, color='black')
-        ax1.plot(np.reshape(self.model.substrate_coords_map_x, (-1, 1)), 
-                   np.reshape(self.model.substrate_coords_map_y, (-1, 1)), 'x', 
+        ax1.plot(reshape(self.model.substrate_coords_map_x, (-1, 1)), 
+                   reshape(self.model.substrate_coords_map_y, (-1, 1)), 'x', 
                    label='mesh point')
         ax1.set_title('Substrate')
         ax1.set_xlabel('x, mm')
@@ -332,8 +332,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.set_ylabel('y, mm')
         self.source_plot_vl.canvas.draw()
         
+        
     def deposition(self):
-        self.update_model()
         I, heterogeneity, I_err = self.model.deposition(self.R, self.k, self.NR, 3)
         try: 
             self.film_vl.canvas.figure.axes[0].cla()

@@ -3,9 +3,8 @@ import numpy.matlib
 from scipy import interpolate
 import time
 import scipy.integrate as integrate
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, Memory
 import math
-from joblib import Memory
 import scipy.optimize as sp_opt
 import custom_minimizer 
 pi = np.pi
@@ -90,7 +89,7 @@ class Model:
                  T = 2 #"temperature" for MC algoritm
                  ):
         
-        self.memory = Memory(verbose=0)
+        self.memory = Memory('cache', verbose=0)
         self.count = 0
         #sputter_profile = 'depline_Kaufman.mat'
         #sputter_profile = 'ExpData/depline_exp_130mm.mat'
@@ -229,8 +228,12 @@ class Model:
                                                     bounds_error=False)
         self.time_f = []
         if cores>1:
-            @self.memory.cache
-            def deposition(R, k, NR, omega):#parallel
+            self.deposition = self.memory.cache(self.deposition_parallel, ignore=['self'])
+        elif cores==1:
+            self.deposition = self.memory.cache(self.deposition_serial, ignore=['self'])           
+        else: raise ValueError('incorrect parameter "cores"')
+        
+    def deposition_parallel(self, R, k, NR, omega):#parallel
                 t0 = time.time()
                 ########### INTEGRATION #################
                 I, I_err = zip(*Parallel(n_jobs=self.cores)(delayed(self.calc)(ij, R, k, NR, omega) for ij in self.ind)) #parallel
@@ -244,9 +247,7 @@ class Model:
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I, heterogeneity, I_err
             
-        elif cores==1:
-            @self.memory.cache
-            def deposition(R, k, NR, omega): #serial
+    def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()
                 ########### INTEGRATION #################
                 I, I_err = zip(*[self.calc(ij, R, k, NR, omega) for ij in self.ind]) #serial
@@ -257,11 +258,8 @@ class Model:
                 heterogeneity = max(h_1, h_2)*100
                 t1 = time.time()
                 self.time_f.append(t1-t0)
-                if verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
+                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I, heterogeneity, I_err
-             
-        else: raise ValueError('incorrect parameter "cores"')
-        self.deposition = deposition
         
     def print_fun(self, x, f, accepted):
         self.count+=1
