@@ -237,28 +237,20 @@ class Model:
                 ########### INTEGRATION #################
                 I, I_err = zip(*Parallel(n_jobs=self.cores)(delayed(self.calc)(ij, R, k, NR, omega) for ij in self.ind)) #parallel
                 I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
-                I_err = reshape(I_err, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
-                h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-                h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-                heterogeneity = max(h_1, h_2)*100
                 t1 = time.time()
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I, heterogeneity, I_err
+                return I
             
     def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()
                 ########### INTEGRATION #################
                 I, I_err = zip(*[self.calc(ij, R, k, NR, omega) for ij in self.ind]) #serial
                 I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
-                I_err = reshape(I_err, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
-                h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-                h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-                heterogeneity = max(h_1, h_2)*100
                 t1 = time.time()
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I, heterogeneity, I_err
+                return I
         
     def print_fun(self, x, f, accepted):
         self.count+=1

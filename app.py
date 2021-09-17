@@ -217,9 +217,12 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     def open_settings(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
-        settings = read_excel(fname, index_col=0)
-        self.update_settings(settings)
-        self.update_model()
+        if fname:
+            settings = read_excel(fname, index_col=0)
+            self.update_settings(settings)
+            self.update_model()
+        else:
+            pass
         
     def update_sliders(self):
         self.R_Slider.setRange(*multiply(self.model.R_bounds, 1/self.model.R_step).astype(int))
@@ -330,7 +333,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         
         
     def deposition(self):
-        I, heterogeneity, I_err = self.model.deposition(self.R, self.k, self.NR, 3)
+        I = self.model.deposition(self.R, self.k, self.NR, 3)
+        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
+        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
+        heterogeneity = max(h_1, h_2)*100
         try: 
             self.film_vl.canvas.figure.axes[0].cla()
         except:
