@@ -1,12 +1,8 @@
-#from PyQt5 import QtWidgets, QtCore
-from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel, QAbstractTableModel, pyqtSlot, QAbstractItemModel
-from PyQt5.QtGui import QStandardItem, QStandardItemModel
+from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel, QAbstractTableModel, pyqtSlot
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
     QStyledItemDelegate,
-    QTableView,
-    QWidget,
     QMainWindow,
     QInputDialog,
     QFileDialog
