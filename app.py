@@ -115,13 +115,11 @@ class Settings(QAbstractTableModel):
             else:
                 flag = False
         elif re.match('cases', value_type):
-            '''
-            d = {}
-            exec(value_type, d) # cases = [..., ..., ...]
-            value_type = d['cases']
-            flag = (value in value_type)
-            '''
-            print(value)
+            try:
+                value = int(value)
+            except:
+                try: value = float(value)
+                except: pass
         elif value_type == 'filename':
             value = str(value)
             t = re.match('.+\\..+', value)
@@ -147,11 +145,11 @@ class DropboxDelegate(QStyledItemDelegate):
         
     def setEditorData(self, editor, index):
         editor.blockSignals(True)
-        editor.setCurrentIndex(int(index.model().data(index)))
+        editor.setCurrentIndex(self.items.index(index.model().data(index)))
         editor.blockSignals(False)
         
     def setModelData(self, editor, model, index):
-        model.setData(index, editor.currentIndex())
+        model.setData(index, self.items[editor.currentIndex()])
         
     @pyqtSlot()
     def currentIndexChanged(self):
@@ -177,9 +175,12 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.R_disp.editingFinished.connect(self.set_R_line)
         self.k_disp.editingFinished.connect(self.set_k_line)
         self.NR_disp.editingFinished.connect(self.set_NR_line)
+        self.thick_edit.editingFinished.connect(self.set_h)
         self.set_R(25)
         self.set_k(1.5)
         self.set_NR(1)
+        self.h = 100
+        self.thick_edit.setText(str(self.h))
         
     def set_delegates(self, table_view):
         l = 0
@@ -283,6 +284,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.NR_disp.setValue(self.NR)
         self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
         
+    def set_h(self):
+        self.h = float(self.sender().text())
+        self.thick_edit.setText(str(self.h))
+        
     def update_model(self):
         settings = self.settings.wrap()
         self.model = functions.Model(**settings)
@@ -330,13 +335,14 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.set_xlabel('x, mm')
         ax2.set_ylabel('y, mm')
         self.source_plot_vl.canvas.draw()
-        
-        
+           
     def deposition(self):
-        I = self.model.deposition(self.R, self.k, self.NR, 3)
+        I = self.model.deposition(self.R, self.k, self.NR, 1)
         h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
         h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
         heterogeneity = max(h_1, h_2)*100
+        thickness = I.mean()
+        omega = self.h/thickness
         try: 
             self.film_vl.canvas.figure.axes[0].cla()
         except:
@@ -353,7 +359,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         #fig.colorbar(ax1f)
         ax1f.set_xlabel('x, mm')
         ax1f.set_ylabel('y, mm')
-        ax1f.set_title(f'Film heterogeneity $H = {round(heterogeneity,2)}\\%$')
+        ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/s, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
     
 def main():

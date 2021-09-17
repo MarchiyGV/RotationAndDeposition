@@ -206,7 +206,7 @@ class Model:
         if source == 1:
             RELdeposition_coords_map_z = rot90(loadtxt(filename, skiprows=1)) #np.rot90
             row_dep = RELdeposition_coords_map_z.max()
-            self.deposition_coords_map_z = C*(RELdeposition_coords_map_z/row_dep)
+            self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
         elif source == 0: 
             if val == 1:
                 center_x, center_y = 80, 59
@@ -218,13 +218,13 @@ class Model:
                 raise ValueError(f'Incorrect magnetron position {val}.')
             self.deposition_coords_map_z, self.F = dep_profile(self.deposition_coords_map_x, 
                                                      self.deposition_coords_map_y, 
-                                                     center_x, center_y, C)
+                                                     center_x, center_y, self.C)
             self.F_axial = True
         
         if not self.F_axial:
             self.F = RegularGridInterpolator((deposition_coords_x, deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
-                                                    transpose(self.deposition_coords_map_z), #np.transpose
-                                                    bounds_error=False)
+                                             transpose(self.deposition_coords_map_z), #np.transpose
+                                             bounds_error=False)
         self.time_f = []
         if cores>1:
             self.deposition = self.memory.cache(self.deposition_parallel, ignore=['self'])
