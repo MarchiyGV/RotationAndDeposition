@@ -8,7 +8,7 @@ import time
 from scipy.integrate import quad
 from joblib import Parallel, delayed, Memory
 from math import ceil
-#import custom_minimizer 
+import custom_minimizer 
 
 ''' 
 Functions and methods
