@@ -67,8 +67,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.save_path = 'saves/'
         settings = read_excel(self.save_path+'settings.xlsx', index_col=0)
         self.update_settings(settings)
-        self.set_delegates(self.table_settings)
-        self.set_delegates(self.table_settings_opt)
+        self.set_delegates(self.table_settings, self.model_settings)
+        self.set_delegates(self.table_settings_opt, self.opt_settings)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
         self.k_Slider.valueChanged.connect(self.set_k_slider)
         self.NR_Slider.valueChanged.connect(self.set_NR_slider)
@@ -82,20 +82,15 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.set_NR(1)
         self.h = 100
         self.thick_edit.setText(str(self.h))
-        self.optimisation_task = Task(self.optimisation, [], 
-                                    self.optimisation_output, [], 
-                                    QThread.TimeCriticalPriority)
-        self.optimiseButton.clicked.connect(self.optimisation_task)
-        self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
-        self.optimisationLog.setText('Log')
+        self.optimiseButton.clicked.connect(self.optimisation_start)
+        self.optimisationLog.setText('Log: \n')
         
-        
-    def set_delegates(self, table_view):
+    def set_delegates(self, table_view, proxy_model):
         l = 0
-        while self.model_settings.index(l,self.settings.index_type).isValid():
+        while proxy_model.index(l,self.settings.index_type).isValid():
            l+=1
         for i in range(l):
-            type_ = self.model_settings.itemData(self.model_settings.index(i,self.settings.index_type))[self.settings.index_type-1]
+            type_ = proxy_model.itemData(proxy_model.index(i,self.settings.index_type))[self.settings.index_type-1]
             if 'cases' in type_:
                 d = {}
                 exec(type_, d) # cases = [..., ..., ...]
@@ -293,18 +288,28 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
         self.DepositionButton.setDisabled(False)
-
-    def optimisation(self):
+        
+    def optimisation_start(self):
+        self.optimisation_task = Task(self.optimisation, [], 
+                                    self.optimisation_output, [], 
+                                    QThread.TimeCriticalPriority)
+        
+        self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
+        self.optimisationLog.setText('Log: \n')    
         self.optimiseButton.setDisabled(True)
         self.cancelOptimiseButton.setDisabled(False)
         self.update_model()
-        self.model.optimisation()
+        self.optimisation_task()
+        
+    def optimisation(self):
+        opt = functions.Optimizer(self.model)
+        opt.upd_signal.connect(self.update_log)
+        opt.optimisation()
     
-    def update_log(self):
-        self.optimisationLog.setText(self.model.log)
+    def update_log(self, message):
+        self.optimisationLog.append(message)
         
     def optimisation_output(self):
-        self.update_log()
         self.optimiseButton.setDisabled(False)
         self.cancelOptimiseButton.setDisabled(True)
         

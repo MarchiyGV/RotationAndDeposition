@@ -10,7 +10,7 @@ from joblib import Parallel, delayed, Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import pyqtSignal, QObject
 
 ''' 
 Functions and methods
@@ -89,7 +89,6 @@ class Model:
                  mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
                  T = 2 #"temperature" for MC algoritm
                  ):
-        
         self.memory = Memory('cache', verbose=0)
         self.count = 0
         #sputter_profile = 'depline_Kaufman.mat'
@@ -253,14 +252,6 @@ class Model:
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I
-        
-    def print_fun(self, x, f, accepted):
-        self.count+=1
-        if accepted == 1: s = 'accepted'
-        else: s = 'rejected' 
-        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.count, self.mc_iter, f, *x, s)
-        print(message)
-        self.log += (message+'\n')
 
     def xyp(self, i, j, a, R, k):
         x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(-a*k + self.alpha0[i,j])
@@ -275,56 +266,74 @@ class Model:
         
         return I/(2*pi*omega), I_err/(2*pi*omega) #Jacobian time to alpha
     
-    def func(self, x):
-        c = 0
-        gate=100
-        delta=(0.1, 0.01)
-        if x[0]<self.R_bounds[0]+delta[0]:
-            c+=gate*(self.R_bounds[0]+delta[0]-x[0])
-        if x[0]>self.R_bounds[1]-delta[0]:  
-            c+=gate*(x[0]+delta[0]-self.R_bounds[0])
-        if x[1]<self.k_bounds[0]+delta[1]:
-            c+=gate*(self.k_bounds[0]+delta[1]-x[1])
-        if x[1]>self.k_bounds[1]-delta[1]:  
-            c+=gate*(x[1]+delta[1]-self.k_bounds[0])
-        h = self.heterogeneity(self.deposition(*x, 1))
-        if self.verbose: 
-            message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)
-            print(message)
-            self.log += (message+'\n')
-        return c+h
-    
     def heterogeneity(self, I):
         h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
         h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
         return max(h_1, h_2)*100
     
+
+    
+class Optimizer(QObject):
+    upd_signal = pyqtSignal(str)
+    def __init__(self, model):
+        QObject.__init__(self)
+        self.model = model
+        self.log = ''
+        
     def optimisation(self):
         self.log = ''
         t0 = time.time()
         mytakestep = custom_minimizer.CustomTakeStep(
-                                (self.R_bounds[1]-self.R_bounds[0])*self.R_mc_interval, 
-                                (self.k_bounds[1]-self.k_bounds[0])*self.k_mc_interval, 
-                                (self.NR_bounds[1]-self.NR_bounds[0])*self.NR_mc_interval, 
-                                self.R_min_step, self.k_min_step, self.NR_min_step, 
-                                self.R_bounds, self.k_bounds, self.NR_bounds)
+                                (self.model.R_bounds[1]-self.model.R_bounds[0])*self.model.R_mc_interval, 
+                                (self.model.k_bounds[1]-self.model.k_bounds[0])*self.model.k_mc_interval, 
+                                (self.model.NR_bounds[1]-self.model.NR_bounds[0])*self.model.NR_mc_interval, 
+                                self.model.R_min_step, self.model.k_min_step, self.model.NR_min_step, 
+                                self.model.R_bounds, self.model.k_bounds, self.model.NR_bounds)
         
-        mybounds = custom_minimizer.CustomBounds(self.R_bounds, 
-                                                 self.k_bounds, 
-                                                 self.NR_bounds)
+        mybounds = custom_minimizer.CustomBounds(self.model.R_bounds, 
+                                                 self.model.k_bounds, 
+                                                 self.model.NR_bounds)
     
-        ret = basinhopping(self.func, self.x0, minimizer_kwargs=self.minimizer, 
-                           niter=self.mc_iter, callback=self.print_fun, 
-                           take_step=mytakestep, T=self.T, accept_test=mybounds)
+        ret = basinhopping(self.func, self.model.x0, minimizer_kwargs=self.model.minimizer, 
+                           niter=self.model.mc_iter, callback=self.print_fun, 
+                           take_step=mytakestep, T=self.model.T, accept_test=mybounds)
     
         R, k, NR = ret.x
         h = ret.fun #heterogeneity
-        message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)
-        print(message)
-        self.log += (message+'\n')
-        I = self.deposition(R, k, NR, 1)
+        message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)    
+        I = self.model.deposition(R, k, NR, 1)
         t1 = time.time()        
-        message ='Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.time_f), mean(self.time_f))
+        message +='Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.model.time_f), mean(self.model.time_f))
         print(message)
         self.log += (message+'\n')
-        return I
+        self.upd_signal.emit(message)
+        return I    
+    
+    def func(self, x):
+        c = 0
+        gate=100
+        delta=(0.1, 0.01)
+        if x[0]<self.model.R_bounds[0]+delta[0]:
+            c+=gate*(self.model.R_bounds[0]+delta[0]-x[0])
+        if x[0]>self.model.R_bounds[1]-delta[0]:  
+            c+=gate*(x[0]+delta[0]-self.model.R_bounds[0])
+        if x[1]<self.model.k_bounds[0]+delta[1]:
+            c+=gate*(self.model.k_bounds[0]+delta[1]-x[1])
+        if x[1]>self.model.k_bounds[1]-delta[1]:  
+            c+=gate*(x[1]+delta[1]-self.model.k_bounds[0])
+        h = self.model.heterogeneity(self.model.deposition(*x, 1))
+        if self.model.verbose: 
+            message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)
+            print(message)
+            self.log += (message+'\n')
+            self.upd_signal.emit(message)
+        return c+h
+    
+    def print_fun(self, x, f, accepted):
+        self.model.count+=1
+        if accepted == 1: s = 'accepted'
+        else: s = 'rejected' 
+        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.model.count, 1+self.model.mc_iter, f, *x, s)
+        print(message)
+        self.log += (message+'\n')
+        self.upd_signal.emit(message)
