@@ -1,11 +1,10 @@
-from PyQt5.QtCore import QModelIndex, Qt, QSortFilterProxyModel, QAbstractTableModel, pyqtSlot
+from PyQt5.QtCore import Qt, QSortFilterProxyModel
 from PyQt5.QtWidgets import (
     QApplication,
-    QComboBox,
-    QStyledItemDelegate,
     QMainWindow,
     QInputDialog,
-    QFileDialog
+    QFileDialog,
+    QAbstractItemView
 )
 
 import matplotlib
@@ -13,154 +12,20 @@ matplotlib.use('QT5Agg')
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape)
-from pandas import (DataFrame, read_excel)
-import re
+from pandas import (read_excel)
 import os
 import design
 import functions 
+from settings import *
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 
-
-class Settings(QAbstractTableModel):
-    def __init__(self, data=[], parent=None):
-        super().__init__(parent)
-        self.data = data
-        self.index_name = 0
-        self.index_variableName = 1
-        self.index_value = 2
-        self.index_type = 3
-        self.index_group = 4
-        self.index_comment = 5 
-        self.indexes_visible = [self.index_name, self.index_value]
-        self.headers = ['Параметр', 'Переменная', 'Значение', 'Тип', 'Группа', 'Комментарий']
-         
-
-    def save(self, filename):
-        df = DataFrame(self.data)
-        df.to_excel(filename+'.xlsx')
-        
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Horizontal:
-                return self.headers[section]
-            else:
-                return str(1+section)
-
-    def columnCount(self, parent=None):
-        return len(self.data[0])
-
-    def rowCount(self, parent=None):
-        return len(self.data)
-    
-    def data(self, index: QModelIndex, role: int):
-        if role == Qt.ToolTipRole:
-            row=index.row()
-            return self.data[row][self.index_comment]
-        if role == Qt.DisplayRole or role == Qt.EditRole:
-            row = index.row()
-            col = index.column()
-            return str(self.data[row][col])
-        
-    def wrap(self):
-        j = self.index_variableName
-        k = self.index_value
-        return {self.data[i][j]: self.data[i][k] for i in range(len(self.data))}
-    
-    def get(self, key):
-        settings = self.settigs()
-        return settings[key]
-        
-    def flags(self, index):
-        if index.column()==self.index_value:
-            return Qt.ItemIsEnabled | Qt.ItemIsEditable
-        if index.column()==self.index_name:
-            return Qt.ItemIsEnabled
-
-    def setData(self, index, value, role):
-        if role == Qt.EditRole and value!='':
-            i = index.row()
-            value, flag = self.suit(i, value)
-            if flag:
-                self.data[i][self.index_value] = value
-            return True
-        return False
-        
-    def suit(self, raw_index, value):
-        value_type = self.data[raw_index][self.index_type] 
-        flag = True
-        if value_type == '+float':
-            try: value = float(value)
-            except: flag = False
-            flag = flag and (value > 0)
-        elif value_type == '0+float':
-            try: value = float(value)
-            except: flag = False
-            flag = flag and (value >= 0)
-        elif value_type == '+int':
-            try: value = int(float(value))
-            except: flag = False
-            flag = flag and (value > 0)
-        elif value_type == '%100':
-            try: value = float(value)
-            except: flag = False
-            flag = flag and (value >= 0) and (value <= 1)
-        elif value_type == 'bool':
-            if value == 'True':
-                value = True
-            elif value == 'False':
-                value = False
-            elif (value == 0 or value == 1): 
-                value = bool(value)
-            else:
-                flag = False
-        elif re.match('cases', value_type):
-            try:
-                value = int(value)
-            except:
-                try: value = float(value)
-                except: pass
-        elif value_type == 'filename':
-            value = str(value)
-            t = re.match('.+\\..+', value)
-            if t:
-                value = t.group(0)
-            else: 
-                flag = False
-        else:
-            print(f'incorrect value {value} ({type(value)})')
-            flag = False
-        return value, flag 
-    
-class DropboxDelegate(QStyledItemDelegate):
-    def __init__(self, wiget, items):
-        super().__init__(wiget)
-        self.items = items
-        
-    def createEditor(self, parent, option, index):
-        combo = QComboBox(parent)
-        combo.addItems(self.items)
-        combo.currentIndexChanged.connect(self.currentIndexChanged)
-        return combo
-        
-    def setEditorData(self, editor, index):
-        editor.blockSignals(True)
-        editor.setCurrentIndex(self.items.index(index.model().data(index)))
-        editor.blockSignals(False)
-        
-    def setModelData(self, editor, model, index):
-        model.setData(index, self.items[editor.currentIndex()])
-        
-    @pyqtSlot()
-    def currentIndexChanged(self):
-        self.commitData.emit(self.sender())
-        
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
+        self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.DepositionButton.clicked.connect(self.deposition)
-        self.actionenter.triggered.connect(self.deposition)
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
@@ -187,14 +52,22 @@ class App(QMainWindow, design.Ui_MainWindow):
         while self.model_settings.index(l,self.settings.index_type).isValid():
            l+=1
         for i in range(l):
-            items = self.model_settings.itemData(self.model_settings.index(i,self.settings.index_type))[self.settings.index_type-1]
-            if 'cases' in items:
+            type_ = self.model_settings.itemData(self.model_settings.index(i,self.settings.index_type))[self.settings.index_type-1]
+            if 'cases' in type_:
                 d = {}
-                exec(items, d) # cases = [..., ..., ...]
+                exec(type_, d) # cases = [..., ..., ...]
                 items = d['cases']
                 for j, item in enumerate(items):
                     items[j] = str(item)
-                table_view.setItemDelegateForRow(i, DropboxDelegate(table_view, items))
+                if 'labels' in d.keys():
+                    labels = d['labels']
+                    table_view.setItemDelegateForRow(i, DropboxDelegate(table_view, items, labels))
+                else:
+                    table_view.setItemDelegateForRow(i, DropboxDelegate(table_view, items))
+            if type_ == 'bool':
+                table_view.setItemDelegateForRow(i, YesNoDelegate(table_view))
+            if type_ == 'filename':
+                table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view))
         
     def update_settings(self, settings):
         self.settings = Settings(array(settings, dtype=object))
@@ -342,7 +215,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
         heterogeneity = max(h_1, h_2)*100
         thickness = I.mean()
-        omega = self.h/thickness
+        omega = thickness/self.h
         try: 
             self.film_vl.canvas.figure.axes[0].cla()
         except:
@@ -359,7 +232,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         #fig.colorbar(ax1f)
         ax1f.set_xlabel('x, mm')
         ax1f.set_ylabel('y, mm')
-        ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/s, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
+        ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
     
 def main():
