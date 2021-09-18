@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, QSortFilterProxyModel
+from PyQt5.QtCore import Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, QThread
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -14,26 +14,61 @@ from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape)
 from pandas import (read_excel)
 import os
+import time
 import design
 import functions 
 from settings import *
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 
+class Task:
+    def __init__(self, func_run, args_run, func_post, args_post, priority=QThread.InheritPriority):
+        self.func_post = func_post
+        self.args_post = args_post
+        self.thread = Thread(func_run, args_run)
+        self.thread.finished.connect(self.post)
+        self.priority = priority
+    
+    def __call__(self):
+        self.thread.start(self.priority)
+    
+    def kill(self):
+        time.sleep(0.3)
+        self.thread.terminate()
+        self.thread.exit()
+        
+    def post(self):
+        self.func_post(*self.args_post)
+        
+    
+class Thread(QThread):
+    def __init__(self, func_run, args_run):
+        super().__init__()
+        self.func_run = func_run
+        self.args_run = args_run
+        
+    def run(self):
+        self.func_run(*self.args_run)
+        
+
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
+        self.deposition_task = Task(self.deposition, [], 
+                                    self.deposition_plot, [], 
+                                    QThread.TimeCriticalPriority)
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
-        self.DepositionButton.clicked.connect(self.deposition)
+        self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
+        self.DepositionButton.clicked.connect(self.deposition_task)
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
-        self.optimizeButton.clicked.connect(self.optimisation)
         self.save_path = 'saves/'
         settings = read_excel(self.save_path+'settings.xlsx', index_col=0)
         self.update_settings(settings)
         self.set_delegates(self.table_settings)
+        self.set_delegates(self.table_settings_opt)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
         self.k_Slider.valueChanged.connect(self.set_k_slider)
         self.NR_Slider.valueChanged.connect(self.set_NR_slider)
@@ -47,6 +82,13 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.set_NR(1)
         self.h = 100
         self.thick_edit.setText(str(self.h))
+        self.optimisation_task = Task(self.optimisation, [], 
+                                    self.optimisation_output, [], 
+                                    QThread.TimeCriticalPriority)
+        self.optimiseButton.clicked.connect(self.optimisation_task)
+        self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
+        self.optimisationLog.setText('Log')
+        
         
     def set_delegates(self, table_view):
         l = 0
@@ -224,7 +266,11 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.source_plot_vl.canvas.draw()
            
     def deposition(self):
-        I = self.model.deposition(self.R, self.k, self.NR, 1)
+        self.DepositionButton.setDisabled(True)
+        self.I = self.model.deposition(self.R, self.k, self.NR, 1)
+        
+    def deposition_plot(self):
+        I = self.I
         heterogeneity = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
@@ -246,10 +292,22 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1f.set_ylabel('y, mm')
         ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
-        
+        self.DepositionButton.setDisabled(False)
+
     def optimisation(self):
+        self.optimiseButton.setDisabled(True)
+        self.cancelOptimiseButton.setDisabled(False)
+        self.update_model()
         self.model.optimisation()
     
+    def update_log(self):
+        self.optimisationLog.setText(self.model.log)
+        
+    def optimisation_output(self):
+        self.update_log()
+        self.optimiseButton.setDisabled(False)
+        self.cancelOptimiseButton.setDisabled(True)
+        
 def main():
     print('app = main')
     app = QApplication(sys.argv)  

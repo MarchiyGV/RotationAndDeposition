@@ -10,6 +10,7 @@ from joblib import Parallel, delayed, Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
+from PyQt5.QtWidgets import QApplication
 
 ''' 
 Functions and methods
@@ -257,7 +258,9 @@ class Model:
         self.count+=1
         if accepted == 1: s = 'accepted'
         else: s = 'rejected' 
-        print("\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.count, self.mc_iter, f, *x, s))
+        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.count, self.mc_iter, f, *x, s)
+        print(message)
+        self.log += (message+'\n')
 
     def xyp(self, i, j, a, R, k):
         x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(-a*k + self.alpha0[i,j])
@@ -286,7 +289,9 @@ class Model:
             c+=gate*(x[1]+delta[1]-self.k_bounds[0])
         h = self.heterogeneity(self.deposition(*x, 1))
         if self.verbose: 
-            print('At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h))
+            message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)
+            print(message)
+            self.log += (message+'\n')
         return c+h
     
     def heterogeneity(self, I):
@@ -295,6 +300,7 @@ class Model:
         return max(h_1, h_2)*100
     
     def optimisation(self):
+        self.log = ''
         t0 = time.time()
         mytakestep = custom_minimizer.CustomTakeStep(
                                 (self.R_bounds[1]-self.R_bounds[0])*self.R_mc_interval, 
@@ -313,9 +319,12 @@ class Model:
     
         R, k, NR = ret.x
         h = ret.fun #heterogeneity
-        print("global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h))
-        
-        I = self.deposition(R, k, NR, 1)[0]
-        t1 = time.time()
-        print('Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.time_f), mean(self.time_f)))
+        message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)
+        print(message)
+        self.log += (message+'\n')
+        I = self.deposition(R, k, NR, 1)
+        t1 = time.time()        
+        message ='Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.time_f), mean(self.time_f))
+        print(message)
+        self.log += (message+'\n')
         return I
