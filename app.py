@@ -29,6 +29,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
+        self.optimizeButton.clicked.connect(self.optimisation)
         self.save_path = 'saves/'
         settings = read_excel(self.save_path+'settings.xlsx', index_col=0)
         self.update_settings(settings)
@@ -71,6 +72,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     def update_settings(self, settings):
         self.settings = Settings(array(settings, dtype=object))
+        ### model tab
         self.model_settings = QSortFilterProxyModel()
         self.model_settings.setSourceModel(self.settings)
         self.model_settings.setFilterKeyColumn(self.settings.index_group)
@@ -81,6 +83,18 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.table_settings.setColumnHidden(i, (not i in self.settings.indexes_visible))
         self.table_settings.verticalHeader().setVisible(False)
         self.table_settings.resizeColumnsToContents()
+        ### optimize tab
+        self.opt_settings = QSortFilterProxyModel()
+        self.opt_settings.setSourceModel(self.settings)
+        self.opt_settings.setFilterKeyColumn(self.settings.index_group)
+        self.opt_settings.setFilterRegExp('(minimisation)|(sys)|(numerical)')
+        self.opt_settings.sort(self.settings.index_group, Qt.DescendingOrder)
+        self.table_settings_opt.setModel(self.opt_settings)
+        for i in range(self.settings.columnCount()):
+            self.table_settings_opt.setColumnHidden(i, (not i in self.settings.indexes_visible))
+        self.table_settings_opt.verticalHeader().setVisible(False)
+        self.table_settings_opt.resizeColumnsToContents()
+        
         
     def save_settings(self):
         name, flag = QInputDialog.getText(self, 'Input Dialog',
@@ -211,9 +225,7 @@ class App(QMainWindow, design.Ui_MainWindow):
            
     def deposition(self):
         I = self.model.deposition(self.R, self.k, self.NR, 1)
-        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-        heterogeneity = max(h_1, h_2)*100
+        heterogeneity = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
         try: 
@@ -234,6 +246,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1f.set_ylabel('y, mm')
         ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
+        
+    def optimisation(self):
+        self.model.optimisation()
     
 def main():
     print('app = main')

@@ -1,6 +1,6 @@
 from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
-    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape
+    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean
     )
 #import numpy.matlib
 from scipy.interpolate import interp1d, RegularGridInterpolator
@@ -9,6 +9,7 @@ from scipy.integrate import quad
 from joblib import Parallel, delayed, Memory
 from math import ceil
 import custom_minimizer 
+from scipy.optimize import basinhopping
 
 ''' 
 Functions and methods
@@ -270,3 +271,51 @@ class Model:
                                   epsrel=self.point_tolerance)
         
         return I/(2*pi*omega), I_err/(2*pi*omega) #Jacobian time to alpha
+    
+    def func(self, x):
+        c = 0
+        gate=100
+        delta=(0.1, 0.01)
+        if x[0]<self.R_bounds[0]+delta[0]:
+            c+=gate*(self.R_bounds[0]+delta[0]-x[0])
+        if x[0]>self.R_bounds[1]-delta[0]:  
+            c+=gate*(x[0]+delta[0]-self.R_bounds[0])
+        if x[1]<self.k_bounds[0]+delta[1]:
+            c+=gate*(self.k_bounds[0]+delta[1]-x[1])
+        if x[1]>self.k_bounds[1]-delta[1]:  
+            c+=gate*(x[1]+delta[1]-self.k_bounds[0])
+        h = self.heterogeneity(self.deposition(*x, 1))
+        if self.verbose: 
+            print('At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h))
+        return c+h
+    
+    def heterogeneity(self, I):
+        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
+        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
+        return max(h_1, h_2)*100
+    
+    def optimisation(self):
+        t0 = time.time()
+        mytakestep = custom_minimizer.CustomTakeStep(
+                                (self.R_bounds[1]-self.R_bounds[0])*self.R_mc_interval, 
+                                (self.k_bounds[1]-self.k_bounds[0])*self.k_mc_interval, 
+                                (self.NR_bounds[1]-self.NR_bounds[0])*self.NR_mc_interval, 
+                                self.R_min_step, self.k_min_step, self.NR_min_step, 
+                                self.R_bounds, self.k_bounds, self.NR_bounds)
+        
+        mybounds = custom_minimizer.CustomBounds(self.R_bounds, 
+                                                 self.k_bounds, 
+                                                 self.NR_bounds)
+    
+        ret = basinhopping(self.func, self.x0, minimizer_kwargs=self.minimizer, 
+                           niter=self.mc_iter, callback=self.print_fun, 
+                           take_step=mytakestep, T=self.T, accept_test=mybounds)
+    
+        R, k, NR = ret.x
+        h = ret.fun #heterogeneity
+        print("global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h))
+        
+        I = self.deposition(R, k, NR, 1)[0]
+        t1 = time.time()
+        print('Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.time_f), mean(self.time_f)))
+        return I

@@ -360,6 +360,58 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="Optimization">
+       <attribute name="title">
+        <string>Оптимизация</string>
+       </attribute>
+       <widget class="QPushButton" name="optimizeButton">
+        <property name="geometry">
+         <rect>
+          <x>160</x>
+          <y>580</y>
+          <width>151</width>
+          <height>34</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Оптимизировать</string>
+        </property>
+       </widget>
+       <widget class="QTableView" name="table_settings_opt">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>30</y>
+          <width>615</width>
+          <height>530</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Ignored" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>400</width>
+          <height>530</height>
+         </size>
+        </property>
+        <property name="sizeAdjustPolicy">
+         <enum>QAbstractScrollArea::AdjustToContents</enum>
+        </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::AnyKeyPressed|QAbstractItemView::DoubleClicked|QAbstractItemView::EditKeyPressed|QAbstractItemView::SelectedClicked</set>
+        </property>
+        <property name="alternatingRowColors">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </widget>
      </widget>
     </item>
    </layout>
