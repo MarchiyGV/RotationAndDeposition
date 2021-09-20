@@ -59,7 +59,7 @@ class Model:
                  verbose=True,  # True: print message each time when function of deposition called
                  delete_cache=True, # True: delete history of function evaluations in the beggining 
                             #of work. Warning: if = False, some changes in the code may be ignored
-                 point_tolerance=5/100, # needed relative tolerance for thickness in each point
+                 point_tolerance=5, # needed relative tolerance for thickness in each point
                  max_angle_divisions = 10, # limit of da while integration = 1 degree / max_angle_divisions
                  holder_inner_radius = 20, # mm
                  holder_outer_radius = 145, # mm
@@ -80,9 +80,9 @@ class Model:
                  x0_2 = 4.1,
                  x0_3 = 1,
                  minimizer = 'NM_custom',
-                 R_mc_interval = 5/100, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
-                 k_mc_interval = 5/100, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
-                 NR_mc_interval = 15/100,
+                 R_mc_interval = 5, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
+                 k_mc_interval = 5, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
+                 NR_mc_interval = 15,
                  R_min_step = 1, #step for MC >= R_min_step
                  k_min_step = 0.01, #step for MC >= k_min_step
                  NR_min_step = 1,
@@ -106,7 +106,7 @@ class Model:
         self.verbose = verbose # True: print message each time when function of deposition called
         self.delete_cache = delete_cache # True: delete history of function evaluations in the beggining 
                             #of work. Warning: if = False, some changes in the code may be ignored
-        self.point_tolerance = point_tolerance # needed relative tolerance for thickness in each point
+        self.point_tolerance = point_tolerance/100 # needed relative tolerance for thickness in each point
         self.max_angle_divisions = max_angle_divisions # limit of da while integration = 1 degree / max_angle_divisions
         self.holder_inner_radius = holder_inner_radius  # mm
         self.holder_outer_radius = holder_outer_radius  # radius sampleholder, mm
@@ -136,9 +136,9 @@ class Model:
                                                 "bounds":(self.R_bounds, self.k_bounds, self.NR_bounds)}
         minimizers = {'NM':NM, 'NM_custom':NM_custom, 'Powell':Powell}
         self.minimizer = minimizers[minimizer]
-        self.R_mc_interval = R_mc_interval #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
-        self.k_mc_interval = k_mc_interval #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
-        self.NR_mc_interval = NR_mc_interval
+        self.R_mc_interval = R_mc_interval/100 #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
+        self.k_mc_interval = k_mc_interval/100 #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
+        self.NR_mc_interval = NR_mc_interval/100
         self.R_min_step = R_min_step #step for MC >= R_min_step
         self.k_min_step = k_min_step #step for MC >= k_min_step
         self.NR_min_step = NR_min_step
@@ -303,7 +303,7 @@ class Optimizer(QObject):
         message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)    
         I = self.model.deposition(R, k, NR, 1)
         t1 = time.time()        
-        message +='Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.model.time_f), mean(self.model.time_f))
+        message +='\nFull time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.model.time_f), mean(self.model.time_f))
         print(message)
         self.log += (message+'\n')
         self.upd_signal.emit(message)

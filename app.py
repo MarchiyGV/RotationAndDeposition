@@ -12,7 +12,6 @@ matplotlib.use('QT5Agg')
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape)
-from pandas import (read_excel)
 import os
 import time
 import design
@@ -64,9 +63,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
-        self.save_path = 'saves/'
-        settings = read_excel(self.save_path+'settings.xlsx', index_col=0)
-        self.update_settings(settings)
+        self.save_path = 'saves/'       
+        self.update_settings(self.save_path+'settings.xlsx')
         self.set_delegates(self.table_settings, self.model_settings)
         self.set_delegates(self.table_settings_opt, self.opt_settings)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
@@ -84,13 +82,14 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.thick_edit.setText(str(self.h))
         self.optimiseButton.clicked.connect(self.optimisation_start)
         self.optimisationLog.setText('Log: \n')
+        self.DepositionButton.setText('&Напыление')
         
     def set_delegates(self, table_view, proxy_model):
         l = 0
         while proxy_model.index(l,self.settings.index_type).isValid():
            l+=1
         for i in range(l):
-            type_ = proxy_model.itemData(proxy_model.index(i,self.settings.index_type))[self.settings.index_type-1]
+            type_ = proxy_model.data(proxy_model.index(i,self.settings.index_type), Qt.DisplayRole)
             if 'cases' in type_:
                 d = {}
                 exec(type_, d) # cases = [..., ..., ...]
@@ -107,8 +106,8 @@ class App(QMainWindow, design.Ui_MainWindow):
             if type_ == 'filename':
                 table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view))
         
-    def update_settings(self, settings):
-        self.settings = Settings(array(settings, dtype=object))
+    def update_settings(self, fname):
+        self.settings = Settings.open_file(fname)
         ### model tab
         self.model_settings = QSortFilterProxyModel()
         self.model_settings.setSourceModel(self.settings)
@@ -143,8 +142,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     def open_settings(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
         if fname:
-            settings = read_excel(fname, index_col=0)
-            self.update_settings(settings)
+            self.update_settings(fname)
             self.update_model()
         else:
             pass
@@ -319,7 +317,7 @@ def main():
     window = App() 
     window.show()  # Показываем окно
     sys.exit(app.exec_())
-    
+        
 if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
     import sys
     main()  # то запускаем функцию main()

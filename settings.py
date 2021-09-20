@@ -6,28 +6,37 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QPushButton
 )
-from pandas import DataFrame
+from pandas import DataFrame, read_excel
 import re
 import os
-
+from numpy import array, nan
 
 class Settings(QAbstractTableModel):
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
-        self.data = data
-        self.index_name = 0
-        self.index_variableName = 1
-        self.index_value = 2
-        self.index_type = 3
-        self.index_group = 4
-        self.index_comment = 5 
-        self.indexes_visible = [self.index_name, self.index_value]
-        self.headers = ['Параметр', 'Переменная', 'Значение', 'Тип', 'Группа', 'Комментарий']
+        self.data = array(data, dtype=object)
+        for i in range(self.data.shape[0]):
+            for j in range(self.data.shape[1]):
+                if self.data[i,j] is nan:
+                    self.data[i,j] = ''
+        self.index_id = 0
+        self.index_name = 1
+        self.index_variableName = 2
+        self.index_value = 3
+        self.index_units = 4
+        self.index_type = 5
+        self.index_group = 6
+        self.index_comment = 7 
+        self.indexes_visible = [self.index_name, self.index_value, self.index_units]
+        self.headers = ['id', 'Параметр', 'Переменная', 'Значение', 'Единицы измерения', 'Тип', 'Группа', 'Комментарий']
          
+    def open_file(path):
+        df = read_excel(path)
+        return Settings(df)
 
     def save(self, filename):
         df = DataFrame(self.data)
-        df.to_excel(filename+'.xlsx')
+        df.to_excel(filename+'.xlsx', index=False)
         
     def headerData(self, section: int, orientation: Qt.Orientation, role: int):
         if role == Qt.DisplayRole:
@@ -37,19 +46,20 @@ class Settings(QAbstractTableModel):
                 return str(1+section)
 
     def columnCount(self, parent=None):
-        return len(self.data[0])
+        return self.data.shape[1]
 
     def rowCount(self, parent=None):
-        return len(self.data)
+        return self.data.shape[0]
     
     def data(self, index: QModelIndex, role: int):
-        if role == Qt.ToolTipRole:
-            row=index.row()
-            return self.data[row][self.index_comment]
-        if role == Qt.DisplayRole or role == Qt.EditRole:
-            row = index.row()
-            col = index.column()
-            return str(self.data[row][col])
+        if index.isValid():
+            if role == Qt.ToolTipRole:
+                row=index.row()
+                return self.data[row][self.index_comment]
+            if role == Qt.DisplayRole or role == Qt.EditRole:
+                row = index.row()
+                col = index.column()
+                return str(self.data[row][col])
         
     def wrap(self):
         j = self.index_variableName
@@ -63,7 +73,9 @@ class Settings(QAbstractTableModel):
     def flags(self, index):
         if index.column()==self.index_value:
             return Qt.ItemIsEnabled | Qt.ItemIsEditable
-        if index.column()==self.index_name:
+        if index.column()==self.index_name or index.column()==self.index_units:
+            return Qt.ItemIsEnabled
+        else: 
             return Qt.ItemIsEnabled
 
     def setData(self, index, value, role):
@@ -93,7 +105,7 @@ class Settings(QAbstractTableModel):
         elif value_type == '%100':
             try: value = float(value)
             except: flag = False
-            flag = flag and (value >= 0) and (value <= 1)
+            flag = flag and (value >= 0) and (value <= 100)
         elif value_type == 'bool':
             if value == 'True':
                 value = True
