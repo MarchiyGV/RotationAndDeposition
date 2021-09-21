@@ -14,6 +14,8 @@ from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape)
 import os
 import time
+import multiprocessing as mp
+
 import design
 import functions 
 from settings import *
@@ -318,6 +320,8 @@ def main():
     window.show()  # Показываем окно
     sys.exit(app.exec_())
         
-if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
+if __name__ == '__main__': 
+    print(mp.get_context())
+    mp.freeze_support()# Если мы запускаем файл напрямую, а не импортируем
     import sys
     main()  # то запускаем функцию main()

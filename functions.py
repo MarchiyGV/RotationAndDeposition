@@ -11,6 +11,7 @@ from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
 from PyQt5.QtCore import pyqtSignal, QObject
+from multiprocessing import Pool
 
 ''' 
 Functions and methods
@@ -24,7 +25,24 @@ def pol2cart(rho, phi):
     y = rho * sin(phi) #np.sin
     return x, y
 
-sqr = lambda x: power(x, 2) #np.power
+def sqr(x):
+    return power(x, 2) #np.power
+
+class interp_axial:
+    def __init__(self, center_x, center_y, norm, f, C):
+        self.center_x = center_x
+        self.center_y = center_y
+        self.norm = norm
+        self.f = f
+        self.C = C
+    
+    def t(self, xy):
+        center_x = self.center_x
+        center_y = self.center_y
+        norm = self.norm
+        f = self.f
+        C = self.C
+        return C*f(sqrt(sqr(xy[0]+center_x)+sqr(xy[1]+center_y)))/norm #np.sqrt
 
 def dep_profile(X, Y, center_x, center_y, C):
     #load('depline_Kaufman.mat')
@@ -38,8 +56,8 @@ def dep_profile(X, Y, center_x, center_y, C):
     Z = f(sqrt(sqr(X+center_x)+sqr(Y+center_y)))#np.sqrt
     norm = Z.max()
     Z = C*Z/Z.max()
-    t = (lambda xy: C*f(sqrt(sqr(xy[0]+center_x)+sqr(xy[1]+center_y)))/norm) #np.sqrt
-    return Z, t
+    interp = interp_axial(center_x, center_y, norm, f, C)
+    return Z, interp.t
 
 '''
 ####INPUTS####
@@ -228,12 +246,13 @@ class Model:
                                              bounds_error=False)
         self.time_f = []
         if cores>1:
-            self.deposition = self.memory.cache(self.deposition_parallel, ignore=['self'])
+            self.deposition = self.memory.cache(self.deposition_multiprocessing, ignore=['self'])
+            #self.deposition = self.memory.cache(self.deposition_joblib, ignore=['self'])
         elif cores==1:
             self.deposition = self.memory.cache(self.deposition_serial, ignore=['self'])           
         else: raise ValueError('incorrect parameter "cores"')
         
-    def deposition_parallel(self, R, k, NR, omega):#parallel
+    def deposition_joblib(self, R, k, NR, omega):#parallel
                 t0 = time.time()
                 ########### INTEGRATION #################
                 I, I_err = zip(*Parallel(n_jobs=self.cores)(delayed(self.calc)(ij, R, k, NR, omega) for ij in self.ind)) #parallel
@@ -242,6 +261,20 @@ class Model:
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I
+       
+    def deposition_multiprocessing(self, R, k, NR, omega):#parallel
+                t0 = time.time()
+                ########### INTEGRATION #################
+                with Pool(self.cores) as p:
+                    result = p.starmap(self.calc, [(ij, R, k, NR, omega) for ij in self.ind])
+                    #result.wait()
+                    I, I_err = zip(*result)
+                I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
+                t1 = time.time()
+                self.time_f.append(t1-t0)
+                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
+                return I
+        
             
     def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()
