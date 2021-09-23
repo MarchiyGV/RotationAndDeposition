@@ -94,6 +94,9 @@ class Settings(QAbstractTableModel):
             try: value = float(value)
             except: flag = False
             flag = flag and (value > 0)
+        elif value_type == 'float':
+            try: value = float(value)
+            except: flag = False
         elif value_type == '0+float':
             try: value = float(value)
             except: flag = False

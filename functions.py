@@ -12,7 +12,8 @@ import custom_minimizer
 from scipy.optimize import basinhopping
 from PyQt5.QtCore import pyqtSignal, QObject
 from multiprocessing import Pool
-
+from ray.util.multiprocessing import Pool as Pool_ray
+import ray
 ''' 
 Functions and methods
 '''
@@ -44,15 +45,10 @@ class interp_axial:
         C = self.C
         return C*f(sqrt(sqr(xy[0]+center_x)+sqr(xy[1]+center_y)))/norm #np.sqrt
 
-def dep_profile(X, Y, center_x, center_y, C):
-    #load('depline_Kaufman.mat')
-    #load('ExpData/depline_exp_130mm.mat')
-    depliney = genfromtxt('depliney.csv',delimiter=',') #np.genfromtxt
-    profile_x_len = 300
-    r = arange(0, profile_x_len, profile_x_len/len(depliney)) #np.arange
-    f = interp1d(r, depliney, fill_value=depliney.min(),  #scipy.interpolate.interp1d
-                             bounds_error=False)
-    
+
+def dep_profile(X, Y, center_x, center_y, C, filename='depliney.txt'):
+    r, h = genfromtxt(filename, delimiter=',', unpack=True)
+    f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
     Z = f(sqrt(sqr(X+center_x)+sqr(Y+center_y)))#np.sqrt
     norm = Z.max()
     Z = C*Z/Z.max()
@@ -65,11 +61,12 @@ def dep_profile(X, Y, center_x, center_y, C):
 
 class Model:
     def __init__(self, 
-                 filename='depz.txt', #path to dep profile
+                 fname_sim='depz.txt', #path to dep profile
                  C=4.46,  #thickness [nm] per minute
                  source=0, #Choose source of get thickness data 1 - seimtra, 0 - experiment
-                 val=3, #1, 2, 3 - magnetron position
-                 substrate_x_len=100, # Substrate width, mm
+                 magnetron_x = 0, #mm
+                 magnetron_y = 0, #mm
+                 substrate_x_len=100 , # Substrate width, mm
                  substrate_y_len=100, # Substrate length, mm
                  substrate_x_res=0.05, # Substrate x resolution, 1/mm
                  substrate_y_res=0.05, # Substrate y resolution, 1/mm
@@ -107,14 +104,15 @@ class Model:
                  mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
                  T = 2 #"temperature" for MC algoritm
                  ):
+        
+        
         self.memory = Memory('cache', verbose=0)
         self.count = 0
         #sputter_profile = 'depline_Kaufman.mat'
         #sputter_profile = 'ExpData/depline_exp_130mm.mat'
-        self.filename = filename
+        self.fname_sim = fname_sim
         self.C = C #thickness [nm] per minute
         self.source = source #Choose source of get thickness data 1 - seimtra, 0 - experiment
-        self.val = val #1, 2, 3 - magnetron position
         self.alpha0_sub = 0*pi
         self.substrate_x_len = substrate_x_len # Substrate width, mm
         self.substrate_y_len = substrate_y_len # Substrate length, mm
@@ -162,12 +160,12 @@ class Model:
         self.NR_min_step = NR_min_step
         self.mc_iter = mc_iter # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
         self.T = T #"temperature" for MC algoritm
-        
+        self.F_axial = False
         ####GEOMETRY + INITIALIZATION####
 
         if self.delete_cache: self.memory.clear(warn=False)
         else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
-        self.F_axial = False
+        
         deposition_offset_x = -deposition_len_x/2 # mm
         deposition_offset_y = -deposition_len_y/2 # mm
         
@@ -222,50 +220,31 @@ class Model:
         #self.ind = [(i, len(self.substrate_coords_map_x[0])//2) for i in range(len(self.substrate_coords_map_x))]
         #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
         
-        if source == 1:
-            RELdeposition_coords_map_z = rot90(loadtxt(filename, skiprows=1)) #np.rot90
+        if source == 'SIMTRA':
+            RELdeposition_coords_map_z = rot90(loadtxt(fname_sim, skiprows=1)) #np.rot90
             row_dep = RELdeposition_coords_map_z.max()
             self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
-        elif source == 0: 
-            if val == 1:
-                center_x, center_y = 80, 59
-            elif val == 2:
-                center_x, center_y = 80, -59
-            elif val == 3:
-                center_x, center_y = -105.8, 0
-            else:
-                raise ValueError(f'Incorrect magnetron position {val}.')
+        elif source == 'Experiment':
             self.deposition_coords_map_z, self.F = dep_profile(self.deposition_coords_map_x, 
                                                      self.deposition_coords_map_y, 
-                                                     center_x, center_y, self.C)
+                                                     magnetron_x, magnetron_y, self.C)
             self.F_axial = True
-        
+        else: raise TypeError(f'incorrect source {source}')
         if not self.F_axial:
             self.F = RegularGridInterpolator((deposition_coords_x, deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
                                              transpose(self.deposition_coords_map_z), #np.transpose
                                              bounds_error=False)
         self.time_f = []
         if cores>1:
-            self.deposition = self.memory.cache(self.deposition_multiprocessing, ignore=['self'])
-            #self.deposition = self.memory.cache(self.deposition_joblib, ignore=['self'])
+            ray.init()
+            self.deposition = self.memory.cache(self.deposition_ray, ignore=['self'])
         elif cores==1:
             self.deposition = self.memory.cache(self.deposition_serial, ignore=['self'])           
         else: raise ValueError('incorrect parameter "cores"')
-        
-    def deposition_joblib(self, R, k, NR, omega):#parallel
+    
+    def deposition_ray(self, R, k, NR, omega):#parallel
                 t0 = time.time()
-                ########### INTEGRATION #################
-                I, I_err = zip(*Parallel(n_jobs=self.cores)(delayed(self.calc)(ij, R, k, NR, omega) for ij in self.ind)) #parallel
-                I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
-                t1 = time.time()
-                self.time_f.append(t1-t0)
-                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I
-       
-    def deposition_multiprocessing(self, R, k, NR, omega):#parallel
-                t0 = time.time()
-                ########### INTEGRATION #################
-                with Pool(self.cores) as p:
+                with Pool_ray(self.cores) as p:
                     result = p.starmap(self.calc, [(ij, R, k, NR, omega) for ij in self.ind])
                     #result.wait()
                     I, I_err = zip(*result)
@@ -273,8 +252,7 @@ class Model:
                 t1 = time.time()
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I
-        
+                return I    
             
     def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()

@@ -103,6 +103,7 @@ def dep_profile(X, Y, center_x, center_y, C):
     t = (lambda xy: C*f(np.sqrt(sqr(xy[0]+center_x)+sqr(xy[1]+center_y)))/norm)
     return Z, t
 
+
 count = 0
 def print_fun(x, f, accepted):
     global count
