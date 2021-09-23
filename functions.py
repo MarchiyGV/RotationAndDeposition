@@ -248,8 +248,7 @@ class Model:
         
         self.deposition_coords_map_x, self.deposition_coords_map_y = meshgrid(self.deposition_coords_x, #np.meshgrid
                                                                        self.deposition_coords_y)
-      
-        
+             
     def open_simtra_file(self, fname):
         with open(fname, 'r') as f:
             line = list(f)[0]
@@ -258,9 +257,11 @@ class Model:
             M, N, I_tot = int(M), int(N), int(I_tot) 
         self.init_deposition_mesh(M=M, N=N)
         RELdeposition_coords_map_z = rot90(loadtxt(fname, skiprows=1)) #np.rot90
+        assert RELdeposition_coords_map_z.shape == (M, N)
         print(f'{RELdeposition_coords_map_z.sum()/I_tot} deposited on surface')
         row_dep = RELdeposition_coords_map_z.max()
         self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
+        assert self.deposition_coords_map_z.max() <= self.C
     
     def open_exp_file(self, fname):
         r, h = genfromtxt(fname, delimiter=',', unpack=True)
@@ -272,6 +273,7 @@ class Model:
                    sqr(self.deposition_coords_map_y+self.magnetron_y)))#np.sqrt
         norm = Z.max()
         Z = self.C*Z/Z.max()
+        assert Z.max()<=self.C
         interp = interp_axial(self.magnetron_x, self.magnetron_x, norm, f, self.C)
         self.deposition_coords_map_z = Z
         self.F = interp.F
