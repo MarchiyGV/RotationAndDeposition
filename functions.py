@@ -6,14 +6,14 @@ from numpy import (
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import time
 from scipy.integrate import quad
-from joblib import Parallel, delayed, Memory
+from joblib import Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
 from PyQt5.QtCore import pyqtSignal, QObject
-from multiprocessing import Pool
 from ray.util.multiprocessing import Pool as Pool_ray
 import ray
+import re
 ''' 
 Functions and methods
 '''
@@ -37,7 +37,7 @@ class interp_axial:
         self.f = f
         self.C = C
     
-    def t(self, xy):
+    def F(self, xy):
         center_x = self.center_x
         center_y = self.center_y
         norm = self.norm
@@ -46,15 +46,6 @@ class interp_axial:
         return C*f(sqrt(sqr(xy[0]+center_x)+sqr(xy[1]+center_y)))/norm #np.sqrt
 
 
-def dep_profile(X, Y, center_x, center_y, C, filename='depliney.txt'):
-    r, h = genfromtxt(filename, delimiter=',', unpack=True)
-    f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
-    Z = f(sqrt(sqr(X+center_x)+sqr(Y+center_y)))#np.sqrt
-    norm = Z.max()
-    Z = C*Z/Z.max()
-    interp = interp_axial(center_x, center_y, norm, f, C)
-    return Z, interp.t
-
 '''
 ####INPUTS####
 '''
@@ -62,6 +53,7 @@ def dep_profile(X, Y, center_x, center_y, C, filename='depliney.txt'):
 class Model:
     def __init__(self, 
                  fname_sim='depz.txt', #path to dep profile
+                 fname_exp='depliney.txt',
                  C=4.46,  #thickness [nm] per minute
                  source=0, #Choose source of get thickness data 1 - seimtra, 0 - experiment
                  magnetron_x = 0, #mm
@@ -111,7 +103,10 @@ class Model:
         #sputter_profile = 'depline_Kaufman.mat'
         #sputter_profile = 'ExpData/depline_exp_130mm.mat'
         self.fname_sim = fname_sim
+        self.fname_exp = fname_exp
         self.C = C #thickness [nm] per minute
+        self.magnetron_x = magnetron_x
+        self.magnetron_y = magnetron_y
         self.source = source #Choose source of get thickness data 1 - seimtra, 0 - experiment
         self.alpha0_sub = 0*pi
         self.substrate_x_len = substrate_x_len # Substrate width, mm
@@ -166,16 +161,7 @@ class Model:
         if self.delete_cache: self.memory.clear(warn=False)
         else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
         
-        deposition_offset_x = -deposition_len_x/2 # mm
-        deposition_offset_y = -deposition_len_y/2 # mm
         
-        self.deposition_rect_x = [deposition_offset_x, deposition_offset_x+deposition_len_x, 
-                             deposition_offset_x+deposition_len_x, deposition_offset_x, 
-                             deposition_offset_x]
-        
-        self.deposition_rect_y = [deposition_offset_y, deposition_offset_y, 
-                             deposition_offset_y+deposition_len_y, 
-                             deposition_offset_y+deposition_len_y, deposition_offset_y]
             
         ang=arange(0, 2*pi,0.01) #np.aarange
         self.holder_circle_inner_x=holder_inner_radius*cos(ang) #np.cos
@@ -184,17 +170,7 @@ class Model:
         self.holder_circle_outer_y=holder_outer_radius*sin(ang) #np.sin 
         
         #### depoition profile meshing
-        deposition_coords_x = linspace(deposition_offset_x,                     #np.linspace
-                                          deposition_offset_x+deposition_len_x, 
-                                          num=ceil(deposition_len_x*deposition_res_x)) #math.ceil
-        
-        deposition_coords_y = linspace(deposition_offset_y, 
-                                          deposition_offset_y+deposition_len_y, 
-                                          num=ceil(deposition_len_y*deposition_res_y))
-        
-        self.deposition_coords_map_x, self.deposition_coords_map_y = meshgrid(deposition_coords_x, #np.meshgrid
-                                                                       deposition_coords_y)
-        
+  
         substrate_coords_x = linspace(-substrate_x_len/2, substrate_x_len/2, 
                                          num=ceil(substrate_x_len*substrate_x_res))
         
@@ -221,19 +197,17 @@ class Model:
         #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
         
         if source == 'SIMTRA':
-            RELdeposition_coords_map_z = rot90(loadtxt(fname_sim, skiprows=1)) #np.rot90
-            row_dep = RELdeposition_coords_map_z.max()
-            self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
+            self.open_simtra_file(fname_sim)
+            
         elif source == 'Experiment':
-            self.deposition_coords_map_z, self.F = dep_profile(self.deposition_coords_map_x, 
-                                                     self.deposition_coords_map_y, 
-                                                     magnetron_x, magnetron_y, self.C)
-            self.F_axial = True
+            self.open_exp_file(fname_exp)
+
         else: raise TypeError(f'incorrect source {source}')
         if not self.F_axial:
-            self.F = RegularGridInterpolator((deposition_coords_x, deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
-                                             transpose(self.deposition_coords_map_z), #np.transpose
-                                             bounds_error=False)
+            self.F = RegularGridInterpolator((self.deposition_coords_x, 
+                                              self.deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
+                                              transpose(self.deposition_coords_map_z), #np.transpose
+                                              bounds_error=False)
         self.time_f = []
         if cores>1:
             ray.init()
@@ -241,6 +215,67 @@ class Model:
         elif cores==1:
             self.deposition = self.memory.cache(self.deposition_serial, ignore=['self'])           
         else: raise ValueError('incorrect parameter "cores"')
+        
+    def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
+        deposition_offset_x = -self.deposition_len_x/2 # mm
+        deposition_offset_y = -self.deposition_len_y/2 # mm
+        if not M: 
+            assert res_x
+            M = ceil(self.deposition_len_x*res_x)
+        if not N: 
+            assert res_y
+            N = ceil(self.deposition_len_y*res_y)
+        
+        self.deposition_rect_x = [deposition_offset_x, 
+                                  deposition_offset_x+self.deposition_len_x, 
+                                  deposition_offset_x+self.deposition_len_x, 
+                                  deposition_offset_x, 
+                                  deposition_offset_x]
+        
+        self.deposition_rect_y = [deposition_offset_y, 
+                                  deposition_offset_y, 
+                                  deposition_offset_y+self.deposition_len_y, 
+                                  deposition_offset_y+self.deposition_len_y, 
+                                  deposition_offset_y]
+        
+        self.deposition_coords_x = linspace(deposition_offset_x,                     #np.linspace
+                                       deposition_offset_x+self.deposition_len_x, 
+                                       num=M) #math.ceil
+        
+        self.deposition_coords_y = linspace(deposition_offset_y, 
+                                       deposition_offset_y+self.deposition_len_y, 
+                                       num=N)
+        
+        self.deposition_coords_map_x, self.deposition_coords_map_y = meshgrid(self.deposition_coords_x, #np.meshgrid
+                                                                       self.deposition_coords_y)
+      
+        
+    def open_simtra_file(self, fname):
+        with open(fname, 'r') as f:
+            line = list(f)[0]
+            M, N, I_tot, s = re.split(r'\t', line)
+            assert s == 'Number of particles\n'
+            M, N, I_tot = int(M), int(N), int(I_tot) 
+        self.init_deposition_mesh(M=M, N=N)
+        RELdeposition_coords_map_z = rot90(loadtxt(fname, skiprows=1)) #np.rot90
+        print(f'{RELdeposition_coords_map_z.sum()/I_tot} deposited on surface')
+        row_dep = RELdeposition_coords_map_z.max()
+        self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
+    
+    def open_exp_file(self, fname):
+        r, h = genfromtxt(fname, delimiter=',', unpack=True)
+        dr = r[1:]-r[:-1]
+        res = 1/dr.min()
+        self.init_deposition_mesh(res_x=res, res_y=res)
+        f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
+        Z = f(sqrt(sqr(self.deposition_coords_map_x+self.magnetron_x)+
+                   sqr(self.deposition_coords_map_y+self.magnetron_y)))#np.sqrt
+        norm = Z.max()
+        Z = self.C*Z/Z.max()
+        interp = interp_axial(self.magnetron_x, self.magnetron_x, norm, f, self.C)
+        self.deposition_coords_map_z = Z
+        self.F = interp.F
+        self.F_axial = True
     
     def deposition_ray(self, R, k, NR, omega):#parallel
                 t0 = time.time()

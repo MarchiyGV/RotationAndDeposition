@@ -11,5 +11,4 @@ def main():
     sys.exit(app.exec_())
     
 if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
-    freeze_support()
     main()  # то запускаем функцию main()

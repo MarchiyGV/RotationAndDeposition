@@ -14,8 +14,6 @@ from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape)
 import os
 import time
-#import multiprocessing as mp
-
 
 import design
 import functions 
@@ -322,6 +320,5 @@ def main():
     sys.exit(app.exec_())
         
 if __name__ == '__main__': 
-    #mp.freeze_support()
     import sys
     main()
