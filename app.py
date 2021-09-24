@@ -124,6 +124,9 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.table_settings.setColumnHidden(i, (not i in self.settings.indexes_visible))
         self.table_settings.verticalHeader().setVisible(False)
         self.table_settings.resizeColumnsToContents()
+        i = self.settings.index_value
+        resize = 2
+        self.table_settings.setColumnWidth(i, self.table_settings.columnWidth(i)*resize)
         ### optimize tab
         self.opt_settings = QSortFilterProxyModel()
         self.opt_settings.setSourceModel(self.settings)

@@ -4,8 +4,11 @@ from PyQt5.QtWidgets import (
     QStyledItemDelegate,
     QInputDialog,
     QFileDialog,
-    QPushButton
+    QPushButton,
+    QLineEdit,
+    QAction
 )
+from PyQt5 import QtGui
 from pandas import DataFrame, read_excel
 import re
 import os
@@ -194,26 +197,53 @@ class DropboxDelegate(QStyledItemDelegate):
     def currentIndexChanged(self):
         self.commitData.emit(self.sender())
         
+class BrowseEdit(QLineEdit):
+    def __init__(self, contents='', filefilters=None,
+        btnicon=None, btnposition=None,
+        opendialogtitle=None, opendialogdir=None, parent=None):
+        super().__init__(contents, parent)
+        self.btnposition = btnposition or QLineEdit.TrailingPosition
+        self.reset_action()
+
+    def _clear_actions(self):
+        for act_ in self.actions():
+            self.removeAction(act_)
+
+    def reset_action(self):
+        self._clear_actions()
+        self.btnaction = QAction(QtGui.QIcon("open.svg"), '')
+        self.btnaction.triggered.connect(self.on_btnaction)
+        self.addAction(self.btnaction, self.btnposition)
+        
+    @pyqtSlot()
+    def on_btnaction(self):
+        self.delegate.blockSignals(True)
+        self.fname = QFileDialog.getOpenFileName(self.parent(), 'Open file', os.getcwd())[0]
+        self.delegate.blockSignals(False)
+        if not self.fname: return
+        self.fname = self.fname.replace('/', os.sep)
+        self.setText(self.fname)
+        
+
+        
 class OpenFileDelegate(QStyledItemDelegate):
     def __init__(self, wiget):
         super().__init__(wiget)
         self.fname = ''
         
     def createEditor(self, parent, option, index):
-        button = QPushButton(parent)
-        button.clicked.connect(self.openFile)
-        button.setText(str(index.model().data(index)))
-        return button
-        
+        editor = BrowseEdit(parent=parent)
+        editor.delegate = self
+        return editor
+    
     def setEditorData(self, editor, index):
         editor.blockSignals(True)
         editor.setText(str(index.model().data(index)))
         editor.blockSignals(False)
         
     def setModelData(self, editor, model, index):
-        model.setData(index, self.fname)
-        
+        model.setData(index, editor.text())
+       
     @pyqtSlot()
     def openFile(self):
-        self.fname = QFileDialog.getOpenFileName(self.parent(), 'Open file')[0]
         self.commitData.emit(self.sender())
