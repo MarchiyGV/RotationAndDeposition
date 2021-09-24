@@ -11,13 +11,23 @@ from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
 from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5 import QtWidgets
 from ray.util.multiprocessing import Pool as Pool_ray
 import ray
 import re
 ''' 
 Functions and methods
 '''
-
+def error(msg):
+    errorbox = QtWidgets.QMessageBox()
+    errorbox.setText(msg)
+    errorbox.exec_()
+    
+def message(msg):
+    errorbox = QtWidgets.QMessageBox()
+    errorbox.setText(msg)
+    errorbox.exec_()
+    
 def moving_average(x, w):
     return convolve(x, ones(w), 'valid') / w #np.convolve
 
@@ -50,7 +60,10 @@ class interp_axial:
 ####INPUTS####
 '''
 
-class Model:
+class Model(QObject):
+    
+    warn_signal = pyqtSignal(str,str)
+    
     def __init__(self, 
                  fname_sim='depz.txt', #path to dep profile
                  fname_exp='depliney.txt',
@@ -96,8 +109,8 @@ class Model:
                  mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
                  T = 2 #"temperature" for MC algoritm
                  ):
-        
-        
+        QObject.__init__(self)
+        self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
         self.count = 0
         #sputter_profile = 'depline_Kaufman.mat'
@@ -197,12 +210,14 @@ class Model:
         #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
         
         if source == 'SIMTRA':
-            self.open_simtra_file(fname_sim)
+            self.success = self.open_simtra_file(fname_sim)
             
         elif source == 'Experiment':
-            self.open_exp_file(fname_exp)
+            self.success = self.open_exp_file(fname_exp)
 
         else: raise TypeError(f'incorrect source {source}')
+        if not self.success: 
+            return None
         if not self.F_axial:
             self.F = RegularGridInterpolator((self.deposition_coords_x, 
                                               self.deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
@@ -250,34 +265,55 @@ class Model:
                                                                        self.deposition_coords_y)
              
     def open_simtra_file(self, fname):
-        with open(fname, 'r') as f:
-            line = list(f)[0]
-            M, N, I_tot, s = re.split(r'\t', line)
-            assert s == 'Number of particles\n'
-            M, N, I_tot = int(M), int(N), int(I_tot) 
-        self.init_deposition_mesh(M=M, N=N)
-        RELdeposition_coords_map_z = rot90(loadtxt(fname, skiprows=1)) #np.rot90
-        assert RELdeposition_coords_map_z.shape == (M, N)
-        print(f'{RELdeposition_coords_map_z.sum()/I_tot} deposited on surface')
-        row_dep = RELdeposition_coords_map_z.max()
-        self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
-        assert self.deposition_coords_map_z.max() <= self.C
-    
+        try:
+            with open(fname, 'r') as f:
+                line = list(f)[0]
+                M, N, I_tot, s = re.split(r'\t', line)
+                assert s == 'Number of particles\n'
+                M, N, I_tot = int(M), int(N), int(I_tot)
+        except:
+            success = False
+            error("Неверный формат файла с результатами расчёта SIMTRA")
+        else:
+            self.init_deposition_mesh(M=M, N=N)
+            RELdeposition_coords_map_z = rot90(loadtxt(fname, skiprows=1)) #np.rot90
+            if RELdeposition_coords_map_z.shape != (M, N):
+                success = False
+                m, n = RELdeposition_coords_map_z.shape
+                error(f"Неверно указана размерность сетки: {M}x{N} вместо {m}x{n}")
+            
+            msg = 'Согласно резудьтатам расчёта SIMTRA:\n {} % потока осаждено на заданную поверхность'.format(round(100*RELdeposition_coords_map_z.sum()/I_tot))
+            type = 'simtra'
+            self.warn_signal.emit(msg, type)
+            message(msg)
+            row_dep = RELdeposition_coords_map_z.max()
+            self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
+            success = True
+
+        return success
+            
     def open_exp_file(self, fname):
-        r, h = genfromtxt(fname, delimiter=',', unpack=True)
-        dr = r[1:]-r[:-1]
-        res = 1/dr.min()
-        self.init_deposition_mesh(res_x=res, res_y=res)
-        f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
-        Z = f(sqrt(sqr(self.deposition_coords_map_x+self.magnetron_x)+
-                   sqr(self.deposition_coords_map_y+self.magnetron_y)))#np.sqrt
-        norm = Z.max()
-        Z = self.C*Z/Z.max()
-        assert Z.max()<=self.C
-        interp = interp_axial(self.magnetron_x, self.magnetron_x, norm, f, self.C)
-        self.deposition_coords_map_z = Z
-        self.F = interp.F
-        self.F_axial = True
+        try:
+            r, h = genfromtxt(fname, delimiter=',', unpack=True)
+        except:
+            success = False
+            error('Неверный формат файла с экспериментальным профилем напыления')
+        else:
+            dr = r[1:]-r[:-1]
+            res = 1/dr.min()
+            self.init_deposition_mesh(res_x=res, res_y=res)
+            f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
+            Z = f(sqrt(sqr(self.deposition_coords_map_x+self.magnetron_x)+
+                       sqr(self.deposition_coords_map_y+self.magnetron_y)))#np.sqrt
+            norm = Z.max()
+            Z = self.C*Z/Z.max()
+            assert Z.max()<=self.C
+            interp = interp_axial(self.magnetron_x, self.magnetron_x, norm, f, self.C)
+            self.deposition_coords_map_z = Z
+            self.F = interp.F
+            self.F_axial = True
+            success = True
+        return success
     
     def deposition_ray(self, R, k, NR, omega):#parallel
                 t0 = time.time()

@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QInputDialog,
     QFileDialog,
-    QAbstractItemView
+    QAbstractItemView,
+    QErrorMessage
 )
 
 import matplotlib
@@ -30,6 +31,7 @@ class Task:
         self.thread.finished.connect(self.post)
         self.priority = priority
     
+    @pyqtSlot()
     def __call__(self):
         self.thread.start(self.priority)
     
@@ -56,6 +58,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
+        self.warnbox = QErrorMessage(self)
         self.deposition_task = Task(self.deposition, [], 
                                     self.deposition_plot, [], 
                                     QThread.TimeCriticalPriority)
@@ -133,14 +136,15 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.table_settings_opt.verticalHeader().setVisible(False)
         self.table_settings_opt.resizeColumnsToContents()
         
-        
+    @pyqtSlot()
     def save_settings(self):
         name, flag = QInputDialog.getText(self, 'Input Dialog',
             'File name:')
         if flag:
             self.update_model()
             self.settings.save(self.save_path+name)
-        
+            
+    @pyqtSlot()    
     def open_settings(self):
         fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
         if fname:
@@ -159,11 +163,13 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.NR_disp.setSingleStep(self.model.NR_step)
         self.k_disp.setDecimals(int(log10(1/self.model.k_step)))
         self.NR_disp.setDecimals(int(log10(1/self.model.NR_step)))
-        
+    
+    @pyqtSlot()
     def set_R_line(self):
         self.R = float(self.R_disp.text())
         self.set_R()
-        
+    
+    @pyqtSlot()    
     def set_R_slider(self):
         self.R = float(self.R_Slider.value())*self.model.R_step
         self.set_R()
@@ -175,11 +181,13 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.R = value
         self.R_disp.setValue(self.R)
         self.R_Slider.setValue(int(self.R/self.model.R_step))
-        
+    
+    @pyqtSlot()
     def set_k_line(self):
         self.k = float(self.k_disp.text())
         self.set_k()
-        
+    
+    @pyqtSlot()
     def set_k_slider(self):
         self.k = float(self.k_Slider.value())*self.model.k_step
         self.set_k()
@@ -191,11 +199,13 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.k = value
         self.k_disp.setValue(self.k)
         self.k_Slider.setValue(int(self.k/self.model.k_step))
-        
+    
+    @pyqtSlot()    
     def set_NR_line(self):
         self.NR = float(self.NR_disp.text())
         self.set_NR()
-        
+    
+    @pyqtSlot()    
     def set_NR_slider(self):
         self.NR = float(self.NR_Slider.value())*self.model.NR_step
         self.set_NR()
@@ -207,14 +217,28 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.NR = value
         self.NR_disp.setValue(self.NR)
         self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
-        
+    
+    @pyqtSlot()    
     def set_h(self):
         self.h = float(self.sender().text())
         self.thick_edit.setText(str(self.h))
         
+    @pyqtSlot(str, str) 
+    def warn(self, msg, type):
+        print('fsdf')
+        self.warnbox.showMessage(msg, type)
+        self.warnbox.exec_()
+           
+    
+    @pyqtSlot()    
     def update_model(self):
         settings = self.settings.wrap()
-        self.model = functions.Model(**settings)
+        t = functions.Model(**settings)
+        if t.success:
+            self.model = t
+        else:
+            return None
+        self.model.warn_signal.connect(self.warn)
         self.update_sliders()
         try: 
             self.mesh_plot_vl.canvas.figure.axes[0].cla()
@@ -259,6 +283,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.set_xlabel('x, mm')
         ax2.set_ylabel('y, mm')
         self.source_plot_vl.canvas.draw()
+        return True
            
     def deposition(self):
         self.DepositionButton.setDisabled(True)
@@ -288,7 +313,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
         self.film_vl.canvas.draw()
         self.DepositionButton.setDisabled(False)
-        
+    
+    @pyqtSlot()    
     def optimisation_start(self):
         self.optimisation_task = Task(self.optimisation, [], 
                                     self.optimisation_output, [], 

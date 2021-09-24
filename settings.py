@@ -202,6 +202,7 @@ class OpenFileDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         button = QPushButton(parent)
         button.clicked.connect(self.openFile)
+        button.setText(str(index.model().data(index)))
         return button
         
     def setEditorData(self, editor, index):
