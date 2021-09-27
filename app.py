@@ -5,14 +5,16 @@ from PyQt5.QtWidgets import (
     QInputDialog,
     QFileDialog,
     QAbstractItemView,
-    QErrorMessage
+    QErrorMessage,
+    QMessageBox,
+    QShortcut
 )
-
+from PyQt5.QtGui import QKeySequence
 import matplotlib
 matplotlib.use('QT5Agg')
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
-from numpy import (array, multiply, log10, reshape)
+from numpy import (array, multiply, log10, reshape, mean, min)
 import os
 import time
 
@@ -59,6 +61,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         super().__init__()
         self.setupUi(self) 
         self.warnbox = QErrorMessage(self)
+        self.errorbox = QMessageBox(self)
         self.deposition_task = Task(self.deposition, [], 
                                     self.deposition_plot, [], 
                                     QThread.TimeCriticalPriority)
@@ -68,26 +71,38 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
-        self.save_path = 'saves/'       
-        self.update_settings(self.save_path+'settings.xlsx')
-        self.set_delegates(self.table_settings, self.model_settings)
-        self.set_delegates(self.table_settings_opt, self.opt_settings)
+        self.save_path = 'saves/'   
+        success = self.update_settings(self.save_path+'settings.xlsx')
+        if success:
+            self.set_delegates(self.table_settings, self.model_settings)
+            self.set_delegates(self.table_settings_opt, self.opt_settings)
+        else: 
+            self.disable_model(True)
+        self.R_Slider.valueChanged.connect(self.plot_geometry_upd)
         self.R_Slider.valueChanged.connect(self.set_R_slider)
         self.k_Slider.valueChanged.connect(self.set_k_slider)
         self.NR_Slider.valueChanged.connect(self.set_NR_slider)
-        self.update_model()
-        self.R_disp.editingFinished.connect(self.set_R_line)
-        self.k_disp.editingFinished.connect(self.set_k_line)
-        self.NR_disp.editingFinished.connect(self.set_NR_line)
+        self.R_disp.valueChanged.connect(self.plot_geometry_upd)
+        self.R_disp.valueChanged.connect(self.set_R_line)
+        self.k_disp.valueChanged.connect(self.set_k_line)
+        self.NR_disp.valueChanged.connect(self.set_NR_line)
         self.thick_edit.editingFinished.connect(self.set_h)
-        self.set_R(25)
-        self.set_k(1.5)
-        self.set_NR(1)
+        if success:
+                self.set_R(mean(self.model.R_bounds))
+                self.set_k(mean(self.model.k_bounds))
+                self.set_NR(min(self.model.NR_bounds))
+
         self.h = 100
         self.thick_edit.setText(str(self.h))
         self.optimiseButton.clicked.connect(self.optimisation_start)
         self.optimisationLog.setText('Log: \n')
-        self.DepositionButton.setText('&Напыление')
+        self.shortcut_deposite = QShortcut('Return', self)
+        self.shortcut_deposite.activated.connect(self.deposition_task)
+
+        
+    def disable_model(self, flag):
+        self.DepositionButton.setDisabled(flag)
+        self.optimiseButton.setDisabled(flag)
         
     def set_delegates(self, table_view, proxy_model):
         l = 0
@@ -112,7 +127,14 @@ class App(QMainWindow, design.Ui_MainWindow):
                 table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view))
         
     def update_settings(self, fname):
-        self.settings = Settings.open_file(fname)
+        try:
+            self.settings = Settings.open_file(fname)
+        except:
+            self.error('Неверный формат файла с настройками')
+            return False
+        success = self.update_model()
+        if not success:
+            return False
         ### model tab
         self.model_settings = QSortFilterProxyModel()
         self.model_settings.setSourceModel(self.settings)
@@ -138,6 +160,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.table_settings_opt.setColumnHidden(i, (not i in self.settings.indexes_visible))
         self.table_settings_opt.verticalHeader().setVisible(False)
         self.table_settings_opt.resizeColumnsToContents()
+        return True
         
     @pyqtSlot()
     def save_settings(self):
@@ -152,7 +175,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         fname = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd()+'/'+self.save_path+'settings.xlsx')[0]
         if fname:
             self.update_settings(fname)
-            self.update_model()
         else:
             pass
         
@@ -231,16 +253,34 @@ class App(QMainWindow, design.Ui_MainWindow):
         print('fsdf')
         self.warnbox.showMessage(msg, type)
         self.warnbox.exec_()
-           
+        
+    def error(self, msg):
+        self.errorbox.setText(msg)
+        self.errorbox.exec_()
     
     @pyqtSlot()    
     def update_model(self):
         settings = self.settings.wrap()
-        t = functions.Model(**settings)
+        try:
+            t = functions.Model(**settings)
+        except:
+            self.error('Ошибка при инициализации модели')
+            self.disable_model(True)
+            return False
         if t.success:
             self.model = t
+            self.disable_model(False)
         else:
-            return None
+            self.disable_model(True)
+            return False
+        if self.model.rotation_type == 'Solar':
+            self.set_k(1)
+            self.k_Slider.setDisabled(True)
+            self.k_disp.setDisabled(True)
+        else:
+            self.k_Slider.setDisabled(False)
+            self.k_disp.setDisabled(False)
+        self.disable_model(False)
         self.model.warn_signal.connect(self.warn)
         self.update_sliders()
         try: 
@@ -286,26 +326,77 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.set_xlabel('x, mm')
         ax2.set_ylabel('y, mm')
         self.source_plot_vl.canvas.draw()
+        self.plot_geometry()
         return True
-           
+    
+    @pyqtSlot() 
+    def plot_geometry_upd(self):
+        substrate_rect_x = array(self.model.substrate_rect_x)+self.R
+        #substrate_rect_y = array(self.model.substrate_rect_y)
+        self.geometry_plot_ref.set_xdata(substrate_rect_x)
+        #self.geometry_plot_ref.set_ydata(substrate_rect_y)
+        self.geometry_vl.canvas.draw()
+
+    @pyqtSlot() 
+    def plot_geometry(self):
+        try:
+            self.geometry_vl.canvas.figure.axes[0].cla()
+        except:
+            fig = Figure()
+            self.geometry_vl.canvas = FigureCanvas(fig)
+            self.geometry_vl.addWidget(self.geometry_vl.canvas)
+            toolbar2 = NavigationToolbar(self.geometry_vl.canvas, self.geometry_plot)
+            self.geometry_vl.addWidget(toolbar2)
+            self.geometry_vl.canvas.figure.add_subplot(111)
+        ax2f = self.geometry_vl.canvas.figure.axes[0]
+        ax2f.contourf(self.model.deposition_coords_map_x, self.model.deposition_coords_map_y, 
+                         self.model.deposition_coords_map_z, 100)
+    
+        ax2f.plot(self.model.holder_circle_inner_x, self.model.holder_circle_inner_y, linewidth=2, 
+             color='black', linestyle='--')
+    
+        ax2f.plot(self.model.holder_circle_outer_x, self.model.holder_circle_outer_y, linewidth=2, 
+             color='black')
+    
+        ax2f.plot(self.model.deposition_rect_x, self.model.deposition_rect_y, linewidth=2, color='green')
+        try:
+            substrate_rect_x = array(self.model.substrate_rect_x)+self.R
+        except AttributeError:
+            substrate_rect_x = array(self.model.substrate_rect_x)+mean(self.model.R_bounds)
+        substrate_rect_y = array(self.model.substrate_rect_y)
+        plot_refs = ax2f.plot(substrate_rect_x, substrate_rect_y, color='black')
+        self.geometry_plot_ref = plot_refs[0]
+        #plt.colorbar()
+        #plt.xlim((min(deposition_rect_x), max(deposition_rect_x)))
+        #plt.ylim((min(deposition_rect_y), max(deposition_rect_y)))
+        ax2f.set_xlabel('x, mm')
+        ax2f.set_ylabel('y, mm')
+        self.geometry_vl.canvas.draw()
+        
     def deposition(self):
         self.DepositionButton.setDisabled(True)
         self.I = self.model.deposition(self.R, self.k, self.NR, 1)
         
     def deposition_plot(self):
         I = self.I
-        heterogeneity = self.model.heterogeneity(I)
+        het = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
+        self.deposition_output.setText('Неоднородность: %.2f\nУгловая скорость: %.3f' % (het, omega))
+        if omega>self.model.omega_s_max:
+            self.warn('Превышена максимальная угловая скорость солнца', 'omega')
+        if omega*self.k>self.model.omega_p_max:
+            self.warn('Превышена максимальная угловая скорость планеты', 'omega')
         try: 
             self.film_vl.canvas.figure.axes[0].cla()
         except:
             fig = Figure()
             self.film_vl.canvas = FigureCanvas(fig)
             self.film_vl.addWidget(self.film_vl.canvas)
-            toolbar = NavigationToolbar(self.film_vl.canvas, self.film_plot)
-            self.film_vl.addWidget(toolbar)
+            toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
+            self.film_vl.addWidget(toolbar1)
             self.film_vl.canvas.figure.add_subplot(111)
+            
         ax1f = self.film_vl.canvas.figure.axes[0]
         ax1f.contourf(self.model.substrate_coords_map_x, 
                       self.model.substrate_coords_map_y, I/I.max())
@@ -313,22 +404,26 @@ class App(QMainWindow, design.Ui_MainWindow):
         #fig.colorbar(ax1f)
         ax1f.set_xlabel('x, mm')
         ax1f.set_ylabel('y, mm')
-        ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
+        #ax1f.set_title(f'$\omega = {round(omega,1)}$ 1/min, film heterogeneity $H = {round(heterogeneity,2)}\\%$')
+        
         self.film_vl.canvas.draw()
         self.DepositionButton.setDisabled(False)
+        
     
     @pyqtSlot()    
     def optimisation_start(self):
-        self.optimisation_task = Task(self.optimisation, [], 
-                                    self.optimisation_output, [], 
-                                    QThread.TimeCriticalPriority)
-        
-        self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
-        self.optimisationLog.setText('Log: \n')    
-        self.optimiseButton.setDisabled(True)
-        self.cancelOptimiseButton.setDisabled(False)
-        self.update_model()
-        self.optimisation_task()
+        success = self.update_model()
+        if success:            
+            self.optimisation_task = Task(self.optimisation, [], 
+                                        self.optimisation_output, [], 
+                                        QThread.TimeCriticalPriority)
+            
+            self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
+            self.optimisationLog.setText('Log: \n')    
+            self.optimiseButton.setDisabled(True)
+            self.cancelOptimiseButton.setDisabled(False)
+            self.optimisation_task()
+
         
     def optimisation(self):
         opt = functions.Optimizer(self.model)

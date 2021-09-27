@@ -58,7 +58,14 @@ class Settings(QAbstractTableModel):
         if index.isValid():
             if role == Qt.ToolTipRole:
                 row=index.row()
-                return self.data[row][self.index_comment]
+                col=index.column()
+                if col==self.index_name:
+                    comment = self.data[row][self.index_comment]
+                    if comment:
+                        return str('<p style="width: 100px;">'+comment+'</p>')
+                elif col==self.index_value:
+                    if self.data[row][self.index_type]=='filename':
+                        return self.data[row][col]
             if role == Qt.DisplayRole or role == Qt.EditRole:
                 row = index.row()
                 col = index.column()

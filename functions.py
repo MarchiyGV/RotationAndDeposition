@@ -1,6 +1,7 @@
 from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
-    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean
+    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean, 
+    log10, arcsin
     )
 #import numpy.matlib
 from scipy.interpolate import interp1d, RegularGridInterpolator
@@ -12,9 +13,11 @@ import custom_minimizer
 from scipy.optimize import basinhopping
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5 import QtWidgets
-from ray.util.multiprocessing import Pool as Pool_ray
-import ray
+#from ray.util.multiprocessing import Pool as Pool_ray
+#import ray
 import re
+import os
+import shutil
 ''' 
 Functions and methods
 '''
@@ -67,10 +70,13 @@ class Model(QObject):
     def __init__(self, 
                  fname_sim='depz.txt', #path to dep profile
                  fname_exp='depliney.txt',
+                 rotation_type = 'Planet',
                  C=4.46,  #thickness [nm] per minute
-                 source=0, #Choose source of get thickness data 1 - seimtra, 0 - experiment
+                 source='Experiment',
                  magnetron_x = 0, #mm
                  magnetron_y = 0, #mm
+                 substrate_shape = 'Circle',
+                 substrate_radius = 50, #mm
                  substrate_x_len=100 , # Substrate width, mm
                  substrate_y_len=100, # Substrate length, mm
                  substrate_x_res=0.05, # Substrate x resolution, 1/mm
@@ -96,6 +102,8 @@ class Model(QObject):
                  k_max = 50, 
                  NR_min = 1,
                  NR_max = 100,
+                 omega_s_max = 100,
+                 omega_p_max = 100,
                  x0_1 = 35, #initial guess for optimisation [R0, k0]
                  x0_2 = 4.1,
                  x0_3 = 1,
@@ -113,6 +121,7 @@ class Model(QObject):
         self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
         self.count = 0
+        self.rotation_type = rotation_type
         #sputter_profile = 'depline_Kaufman.mat'
         #sputter_profile = 'ExpData/depline_exp_130mm.mat'
         self.fname_sim = fname_sim
@@ -122,6 +131,13 @@ class Model(QObject):
         self.magnetron_y = magnetron_y
         self.source = source #Choose source of get thickness data 1 - seimtra, 0 - experiment
         self.alpha0_sub = 0*pi
+        self.substrate_shape = substrate_shape
+        if substrate_shape == 'Circle':
+            self.substrate_radius = substrate_radius
+            substrate_x_len = substrate_radius*2
+            substrate_y_len = substrate_radius*2
+        else:
+            self.substrate_radius = sqrt(substrate_x_len**2+substrate_y_len**2)/2
         self.substrate_x_len = substrate_x_len # Substrate width, mm
         self.substrate_y_len = substrate_y_len # Substrate length, mm
         self.substrate_x_res = substrate_x_res # Substrate x resolution, 1/mm
@@ -139,11 +155,51 @@ class Model(QObject):
         self.deposition_res_x = deposition_res_x # 1/mm
         self.deposition_res_y = deposition_res_y # 1/mm
         self.R_step = R_step
+        R_decimals = int(log10(1/self.R_step))
         self.k_step = k_step
         self.NR_step = NR_step
-        self.R_bounds = (R_min, R_max) # (min, max) mm
+        if rotation_type == 'Planet':
+            R_min_self = holder_inner_radius+self.substrate_radius
+            R_max_self = holder_outer_radius-self.substrate_radius
+        else:
+            R_min_self = holder_inner_radius+substrate_x_len/2
+            R_max_self = holder_outer_radius*cos(arcsin(substrate_y_len/2/holder_outer_radius))-substrate_x_len/2
+            k_min = 1
+            k_max = 1
+        if R_min_self>R_max_self:
+            print(R_min_self, R_max_self, cos(arcsin(substrate_y_len/2/holder_outer_radius)))
+            r = (holder_outer_radius-holder_inner_radius)/2
+            if rotation_type == 'Solar':
+                r_ = holder_inner_radius
+                R_ = holder_outer_radius
+                l = (4/5)*(sqrt(5*R_**2-r_**2)/2-r_)
+            else:
+                l = (holder_outer_radius-holder_inner_radius)/sqrt(2)
+            error(f'При такой контрукции подложкодержателя и камеры максимально возможный радиус (для прямоугольной - полудиагональ) подложки {round(r, R_decimals+1)} мм.\nВ случае квадратной подложки максимальная длина стороны {round(l, R_decimals+1)} мм')
+            self.success = False
+            return False
+        else:
+            if R_min < R_min_self:
+                error(f'При такой конструкции подложкодержателя и размере подложки минимальный радиус {round(R_min_self, R_decimals+1)} мм. Это значение установленно автоматически.')
+            if R_max > R_max_self:
+                error(f'При такой конструкции подложкодержателя и размере подложки максимальный радиус {round(R_max_self, R_decimals+1)} мм. Это значение установленно автоматически.')
+        if R_min>R_max:
+            error('Верхняя граница R не может быть меньше нижней!')
+            self.success = False
+            return False
+        if k_min>k_max:
+            error('Верхняя граница k не может быть меньше нижней!')
+            self.success = False
+            return False
+        if NR_min>NR_max:
+            error('Верхняя граница NR не может быть меньше нижней!')
+            self.success = False
+            return False
+        self.R_bounds = (max(R_min, R_min_self), min(R_max, R_max_self)) # (min, max) mm
         self.k_bounds = (k_min, k_max) # (min, max)
         self.NR_bounds = (NR_min, NR_max)
+        self.omega_s_max = omega_s_max
+        self.omega_p_max = omega_p_max
         self.x0 = [x0_1, x0_2, x0_3] #initial guess for optimisation [R0, k0]
         NM = {"method":"Nelder-Mead", "options":{"disp": True, "xatol":0.01, 
                                                  "fatol":0.01, 'maxfev':200}, 
@@ -171,7 +227,26 @@ class Model(QObject):
         self.F_axial = False
         ####GEOMETRY + INITIALIZATION####
 
-        if self.delete_cache: self.memory.clear(warn=False)
+        if self.delete_cache: 
+            try:
+                self.memory.clear(warn=False)
+                try:
+                    dirpath = 'temp_cache'
+                    if os.path.exists(dirpath) and os.path.isdir(dirpath):
+                        shutil.rmtree(dirpath)
+                except PermissionError as err:
+                    error('Не получилось удалить "temp_cache"')
+            except PermissionError as err:
+                msg1 = 'Нет доступа к кэшу, не получилось стереть кэш:\n\n'
+                msg2 = '\n\nДля текущей модели будет создана дополнительная папка "temp_cache".\nПеред следующим сеансом рекомендуется перезапустить Python//программу'
+                error(msg1+str(err)+msg2)
+                self.memory = Memory('temp_cache', verbose=0)
+                try:
+                    self.memory.clear(warn=False)
+                except PermissionError:
+                    error('Для новой папки произошла таже ошибка')
+                    self.success = False
+                    return False
         else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
         
         
@@ -193,14 +268,19 @@ class Model(QObject):
         self.substrate_coords_map_x, self.substrate_coords_map_y = meshgrid(substrate_coords_x, 
                                                                      substrate_coords_y)
         
-        self.substrate_rect_x = [substrate_coords_x.min(), substrate_coords_x.max(), 
-                            substrate_coords_x.max(), substrate_coords_x.min(), 
-                            substrate_coords_x.min()]
+        if substrate_shape == 'Rectangle':
+            self.substrate_rect_x = [substrate_coords_x.min(), substrate_coords_x.max(), 
+                                substrate_coords_x.max(), substrate_coords_x.min(), 
+                                substrate_coords_x.min()]
+            
+            self.substrate_rect_y = [substrate_coords_y.max(), substrate_coords_y.max(), 
+                                substrate_coords_y.min(), substrate_coords_y.min(), 
+                                substrate_coords_y.max()]
         
-        self.substrate_rect_y = [substrate_coords_y.max(), substrate_coords_y.max(), 
-                            substrate_coords_y.min(), substrate_coords_y.min(), 
-                            substrate_coords_y.max()]
-        
+        else:
+            a = linspace(0, 2*pi, num=45)
+            self.substrate_rect_x = self.substrate_radius*cos(a)
+            self.substrate_rect_y = self.substrate_radius*sin(a)
         
 
         self.rho = sqrt(sqr(self.substrate_coords_map_x) + sqr(self.substrate_coords_map_y))
@@ -223,13 +303,26 @@ class Model(QObject):
                                               self.deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
                                               transpose(self.deposition_coords_map_z), #np.transpose
                                               bounds_error=False)
+
+        joblib_ignore=['self']
+        
+        if rotation_type == 'Planet':
+            self.xyp = self.xyp_planet
+        elif rotation_type == 'Solar':
+            self.xyp = self.xyp_solar
+            joblib_ignore.append('k')
+            
         self.time_f = []
+        
         if cores>1:
-            ray.init()
-            self.deposition = self.memory.cache(self.deposition_ray, ignore=['self'])
+            #ray.init()
+            #self.deposition = self.memory.cache(self.deposition_ray, ignore=['self'])
+            error('parrallel does not supported now')
+            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
         elif cores==1:
-            self.deposition = self.memory.cache(self.deposition_serial, ignore=['self'])           
-        else: raise ValueError('incorrect parameter "cores"')
+            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
+        else: error('incorrect parameter "cores"')
+        self.success = True
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
         deposition_offset_x = -self.deposition_len_x/2 # mm
@@ -271,7 +364,10 @@ class Model(QObject):
                 M, N, I_tot, s = re.split(r'\t', line)
                 assert s == 'Number of particles\n'
                 M, N, I_tot = int(M), int(N), int(I_tot)
-        except:
+        except FileNotFoundError: 
+            success = False
+            error(f"Файл {fname} не найден")
+        except: 
             success = False
             error("Неверный формат файла с результатами расчёта SIMTRA")
         else:
@@ -294,7 +390,11 @@ class Model(QObject):
             
     def open_exp_file(self, fname):
         try:
-            r, h = genfromtxt(fname, delimiter=',', unpack=True)
+            with open(fname, 'r') as f:
+                r, h = genfromtxt(f, delimiter=',', unpack=True)
+        except FileNotFoundError: 
+            success = False
+            error(f"Файл {fname} не найден")
         except:
             success = False
             error('Неверный формат файла с экспериментальным профилем напыления')
@@ -314,19 +414,18 @@ class Model(QObject):
             self.F_axial = True
             success = True
         return success
-    
+    '''
     def deposition_ray(self, R, k, NR, omega):#parallel
                 t0 = time.time()
                 with Pool_ray(self.cores) as p:
                     result = p.starmap(self.calc, [(ij, R, k, NR, omega) for ij in self.ind])
-                    #result.wait()
                     I, I_err = zip(*result)
                 I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
                 t1 = time.time()
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I    
-            
+    '''      
     def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()
                 ########### INTEGRATION #################
@@ -337,9 +436,14 @@ class Model(QObject):
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
                 return I
 
-    def xyp(self, i, j, a, R, k):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(-a*k + self.alpha0[i,j])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i,j]*sin(-a*k + self.alpha0[i,j])
+    def xyp_planet(self, i, j, a, R, k):
+        x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(a*k + self.alpha0[i,j])
+        y = R*sin(a+self.alpha0_sub)+self.rho[i,j]*sin(a*k + self.alpha0[i,j])
+        return x, y
+    
+    def xyp_solar(self, i, j, a, R, k=1):
+        x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(a + self.alpha0[i,j])
+        y = R*sin(a+self.alpha0_sub)+self.rho[i,j]*sin(a + self.alpha0[i,j])
         return x, y
     
     def calc(self, ind, R, k, NR, omega):

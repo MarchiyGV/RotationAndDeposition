@@ -8,6 +8,7 @@ log = logging.getLogger(__name__)
 handler = logging.StreamHandler(stream=sys.stdout)
 log.addHandler(handler)
 logging.basicConfig(filename='app.log', level=logging.DEBUG)
+logging.captureWarnings(True)
 
 def show_exception_box(log_msg):
     """Checks if a QApplication instance is available and shows a messagebox with the exception message. 
