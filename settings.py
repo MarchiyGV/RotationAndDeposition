@@ -237,6 +237,7 @@ class OpenFileDelegate(QStyledItemDelegate):
     def __init__(self, wiget):
         super().__init__(wiget)
         self.fname = ''
+        self.wiget = wiget
         
     def createEditor(self, parent, option, index):
         editor = BrowseEdit(parent=parent)

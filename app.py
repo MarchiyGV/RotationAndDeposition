@@ -71,6 +71,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
+        self.shortcut_deposite = QShortcut('Return', self)
+        self.InputWidget.currentChanged.connect(self.enable_shortcut)
+        self.shortcut_deposite.activated.connect(self.DepositionButton.clicked.emit)
         self.save_path = 'saves/'   
         success = self.update_settings(self.save_path+'settings.xlsx')
         if success:
@@ -96,13 +99,14 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.thick_edit.setText(str(self.h))
         self.optimiseButton.clicked.connect(self.optimisation_start)
         self.optimisationLog.setText('Log: \n')
-        self.shortcut_deposite = QShortcut('Return', self)
-        self.shortcut_deposite.activated.connect(self.deposition_task)
-
         
+    def enable_shortcut(self, index):
+        self.shortcut_deposite.setEnabled(index == 1)
+            
     def disable_model(self, flag):
         self.DepositionButton.setDisabled(flag)
         self.optimiseButton.setDisabled(flag)
+        self.shortcut_deposite.setEnabled(self.InputWidget.currentIndex()==1 and not flag)
         
     def set_delegates(self, table_view, proxy_model):
         l = 0
@@ -140,7 +144,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model_settings.setSourceModel(self.settings)
         self.model_settings.setFilterKeyColumn(self.settings.index_group)
         self.model_settings.setFilterRegExp('(model)|(sys)|(numerical)')
-        self.model_settings.sort(self.settings.index_group, Qt.DescendingOrder)
+        #self.model_settings.sort(self.settings.index_id, Qt.AscendingOrder)
         self.table_settings.setModel(self.model_settings)
         for i in range(self.settings.columnCount()):
             self.table_settings.setColumnHidden(i, (not i in self.settings.indexes_visible))
@@ -152,9 +156,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         ### optimize tab
         self.opt_settings = QSortFilterProxyModel()
         self.opt_settings.setSourceModel(self.settings)
+        
         self.opt_settings.setFilterKeyColumn(self.settings.index_group)
         self.opt_settings.setFilterRegExp('(minimisation)|(sys)|(numerical)')
-        self.opt_settings.sort(self.settings.index_group, Qt.DescendingOrder)
+        #self.opt_settings.sort(self.settings.index_id, Qt.AscendingOrder)
         self.table_settings_opt.setModel(self.opt_settings)
         for i in range(self.settings.columnCount()):
             self.table_settings_opt.setColumnHidden(i, (not i in self.settings.indexes_visible))

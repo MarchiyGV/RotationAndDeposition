@@ -36,7 +36,8 @@ class Ui_MainWindow(object):
         self.table_settings.setSizePolicy(sizePolicy)
         self.table_settings.setMinimumSize(QtCore.QSize(400, 530))
         self.table_settings.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
-        self.table_settings.setEditTriggers(QtWidgets.QAbstractItemView.AnyKeyPressed|QtWidgets.QAbstractItemView.DoubleClicked|QtWidgets.QAbstractItemView.EditKeyPressed|QtWidgets.QAbstractItemView.SelectedClicked)
+        self.table_settings.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.table_settings.setDragDropOverwriteMode(False)
         self.table_settings.setAlternatingRowColors(False)
         self.table_settings.setObjectName("table_settings")
         self.verticalLayout_2.addWidget(self.table_settings)
@@ -258,7 +259,7 @@ class Ui_MainWindow(object):
         self.actionenter.setObjectName("actionenter")
 
         self.retranslateUi(MainWindow)
-        self.InputWidget.setCurrentIndex(1)
+        self.InputWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
