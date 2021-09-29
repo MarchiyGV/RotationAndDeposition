@@ -255,7 +255,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     @pyqtSlot(str, str) 
     def warn(self, msg, type):
-        print('fsdf')
         self.warnbox.showMessage(msg, type)
         self.warnbox.exec_()
         
@@ -269,13 +268,14 @@ class App(QMainWindow, design.Ui_MainWindow):
         try:
             t = functions.Model(**settings)
         except:
-            self.error('Ошибка при инициализации модели')
+            self.error('Неизвестная ошибка при инициализации модели')
             self.disable_model(True)
             return False
         if t.success:
             self.model = t
             self.disable_model(False)
         else:
+            self.error('Ошибка при инициализации модели')
             self.disable_model(True)
             return False
         if self.model.rotation_type == 'Solar':
@@ -306,8 +306,8 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.source_plot_vl.canvas.figure.add_subplot(111)
         ax1 = self.mesh_plot_vl.canvas.figure.axes[0]
         ax1.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, color='black')
-        ax1.plot(reshape(self.model.substrate_coords_map_x, (-1, 1)), 
-                   reshape(self.model.substrate_coords_map_y, (-1, 1)), 'x', 
+        ax1.plot(self.model.xs, 
+                   self.model.ys, 'x', 
                    label='mesh point')
         ax1.set_title('Substrate')
         ax1.set_xlabel('x, mm')
@@ -387,11 +387,11 @@ class App(QMainWindow, design.Ui_MainWindow):
         het = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
-        self.deposition_output.setText('Неоднородность: %.2f\nУгловая скорость: %.3f' % (het, omega))
+        self.deposition_output.setText('Неоднородность: %.2f проценов\nУгловая скорость: %.3f оборотов/мин.' % (het, omega))
         if omega>self.model.omega_s_max:
-            self.warn('Превышена максимальная угловая скорость солнца', 'omega')
+            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
         if omega*self.k>self.model.omega_p_max:
-            self.warn('Превышена максимальная угловая скорость планеты', 'omega')
+            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
         try: 
             self.film_vl.canvas.figure.axes[0].cla()
         except:
@@ -403,8 +403,8 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.film_vl.canvas.figure.add_subplot(111)
             
         ax1f = self.film_vl.canvas.figure.axes[0]
-        ax1f.contourf(self.model.substrate_coords_map_x, 
-                      self.model.substrate_coords_map_y, I/I.max())
+        ax1f.tricontourf(self.model.xs, 
+                      self.model.ys, I/I.max())
         #fig.clim(I.min()/I.max(), 1)
         #fig.colorbar(ax1f)
         ax1f.set_xlabel('x, mm')

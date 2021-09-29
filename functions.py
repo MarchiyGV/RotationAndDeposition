@@ -3,6 +3,7 @@ from numpy import (
     linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean, 
     log10, arcsin
     )
+import numpy as np
 #import numpy.matlib
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import time
@@ -79,8 +80,7 @@ class Model(QObject):
                  substrate_radius = 50, #mm
                  substrate_x_len=100 , # Substrate width, mm
                  substrate_y_len=100, # Substrate length, mm
-                 substrate_x_res=0.05, # Substrate x resolution, 1/mm
-                 substrate_y_res=0.05, # Substrate y resolution, 1/mm
+                 substrate_res=0.05, # Substrate x resolution, 1/mm
                  cores=1, # number of jobs for paralleling
                  verbose=True,  # True: print message each time when function of deposition called
                  delete_cache=True, # True: delete history of function evaluations in the beggining 
@@ -140,8 +140,9 @@ class Model(QObject):
             self.substrate_radius = sqrt(substrate_x_len**2+substrate_y_len**2)/2
         self.substrate_x_len = substrate_x_len # Substrate width, mm
         self.substrate_y_len = substrate_y_len # Substrate length, mm
-        self.substrate_x_res = substrate_x_res # Substrate x resolution, 1/mm
-        self.substrate_y_res = substrate_y_res # Substrate y resolution, 1/mm
+        self.substrate_res = substrate_res # Substrate x resolution, 1/mm
+        self.substrate_rows = ceil(substrate_y_len*substrate_res)
+        self.substrate_columns = ceil(substrate_x_len*substrate_res)
         self.cores = cores # number of jobs for paralleling
         self.verbose = verbose # True: print message each time when function of deposition called
         self.delete_cache = delete_cache # True: delete history of function evaluations in the beggining 
@@ -234,7 +235,7 @@ class Model(QObject):
                     dirpath = 'temp_cache'
                     if os.path.exists(dirpath) and os.path.isdir(dirpath):
                         shutil.rmtree(dirpath)
-                except PermissionError as err:
+                except PermissionError:
                     error('Не получилось удалить "temp_cache"')
             except PermissionError as err:
                 msg1 = 'Нет доступа к кэшу, не получилось стереть кэш:\n\n'
@@ -260,10 +261,10 @@ class Model(QObject):
         #### depoition profile meshing
   
         substrate_coords_x = linspace(-substrate_x_len/2, substrate_x_len/2, 
-                                         num=ceil(substrate_x_len*substrate_x_res))
+                                         num=self.substrate_columns)
         
         substrate_coords_y = linspace(-substrate_y_len/2, substrate_y_len/2, 
-                                         num=ceil(substrate_y_len*substrate_y_res))
+                                         num=self.substrate_rows)
         
         self.substrate_coords_map_x, self.substrate_coords_map_y = meshgrid(substrate_coords_x, 
                                                                      substrate_coords_y)
@@ -276,16 +277,44 @@ class Model(QObject):
             self.substrate_rect_y = [substrate_coords_y.max(), substrate_coords_y.max(), 
                                 substrate_coords_y.min(), substrate_coords_y.min(), 
                                 substrate_coords_y.max()]
-        
+            
+            self.rho = sqrt(sqr(self.substrate_coords_map_x) + sqr(self.substrate_coords_map_y))
+            self.alpha0 = arctan2(self.substrate_coords_map_y, self.substrate_coords_map_x) #np.arctan2
+            self.rho = self.rho.ravel()
+            self.alpha0 = self.alpha0.ravel()
+            self.xs = self.substrate_coords_map_x.ravel()
+            self.ys = self.substrate_coords_map_y.ravel()            
         else:
             a = linspace(0, 2*pi, num=45)
             self.substrate_rect_x = self.substrate_radius*cos(a)
             self.substrate_rect_y = self.substrate_radius*sin(a)
-        
+            r_ = self.substrate_radius
+            rho = linspace(0, r_, num=ceil(r_*self.substrate_res))
+            rho = rho[rho>0]
+            angles = []
+            rs = []
+            for r in rho:
+                n = ceil(2*pi*r*self.substrate_res)
+                a = linspace(0,2*pi, num=n+1)
+                a = a[a<2*pi]
+                angles.append(a)
+                rs.append([r]*n)
+            alpha0 = np.concatenate(angles)
+            rho = np.concatenate(rs)   
+            #self.rho, self.alpha0 = np.meshgrid(rho, alpha0)
+            self.rho = rho.ravel()
+            self.alpha0 = alpha0.ravel()
+            self.rho = np.concatenate(([0], self.rho))
+            self.alpha0 = np.concatenate(([0], self.alpha0))
+            self.xs, self.ys = pol2cart(self.rho, self.alpha0) 
 
-        self.rho = sqrt(sqr(self.substrate_coords_map_x) + sqr(self.substrate_coords_map_y))
-        self.alpha0 = arctan2(self.substrate_coords_map_y, self.substrate_coords_map_x) #np.arctan2
-        self.ind = [(i, j) for i in range(len(self.substrate_coords_map_x)) for j in range(len(self.substrate_coords_map_x[i]))]
+        self.ind = list(range(len(self.xs)))
+        '''
+        import matplotlib.pyplot as plt
+        plt.plot(self.xs, self.ys, 'x')
+        for i in self.ind:
+            plt.text(self.xs[i], self.ys[i], str(i))
+        '''
         #self.ind = [(i, len(self.substrate_coords_map_x[0])//2) for i in range(len(self.substrate_coords_map_x))]
         #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
         
@@ -429,37 +458,47 @@ class Model(QObject):
     def deposition_serial(self, R, k, NR, omega): #serial
                 t0 = time.time()
                 ########### INTEGRATION #################
-                I, I_err = zip(*[self.calc(ij, R, k, NR, omega) for ij in self.ind]) #serial
-                I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
+                I, I_err = zip(*[self.calc(i, R, k, NR, omega) for i in self.ind]) #serial
+                #I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
                 t1 = time.time()
                 self.time_f.append(t1-t0)
                 if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I
+                return np.array(I)
 
-    def xyp_planet(self, i, j, a, R, k):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(a*k + self.alpha0[i,j])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i,j]*sin(a*k + self.alpha0[i,j])
+    def xyp_planet(self, i, a, R, k):
+        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a*k + self.alpha0[i])
+        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a*k + self.alpha0[i])
         return x, y
     
-    def xyp_solar(self, i, j, a, R, k=1):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i,j]*cos(a + self.alpha0[i,j])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i,j]*sin(a + self.alpha0[i,j])
+    def xyp_solar(self, i, a, R, k=1):
+        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a + self.alpha0[i])
+        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a + self.alpha0[i])
         return x, y
     
-    def calc(self, ind, R, k, NR, omega):
-        i, j = ind
-        I, I_err = quad(lambda a: self.F(self.xyp(i, j, a, R, k)), 0, NR*2*pi, #scipy.integrate.quad
+    def calc(self, i, R, k, NR, omega):
+        I, I_err = quad(lambda a: self.F(self.xyp(i, a, R, k)), 0, NR*2*pi, #scipy.integrate.quad
                                   limit=int(round(self.max_angle_divisions*360*NR)), 
                                   epsrel=self.point_tolerance)
         
         return I/(2*pi*omega), I_err/(2*pi*omega) #Jacobian time to alpha
-    
+    '''
     def heterogeneity(self, I):
         h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
         h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
         return max(h_1, h_2)*100
+    '''
+    def heterogeneity(self, I):
+        return (1-I.min()/I.max())*100
     
-
+    def grid_I(self, I):
+        I_grid = np.zeros((self.substrate_rows, self.substrate_columns))
+        dy = self.substrate_y_len/(self.substrate_rows-1)
+        dx = self.substrate_x_len/(self.substrate_columns-1)
+        for ind in self.ind:
+            i = int(ceil((self.substrate_y_len/2+self.ys[ind])/dy))
+            j = int(ceil((self.substrate_x_len/2+self.xs[ind])/dx))
+            I_grid[i, j] = I[ind]
+        return I_grid
     
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
