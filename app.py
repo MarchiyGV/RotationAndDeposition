@@ -401,6 +401,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.geometry_vl.canvas = FigureCanvas(fig)
             self.geometry_vl.addWidget(self.geometry_vl.canvas)
             self.toolbar2 = NavigationToolbar(self.geometry_vl.canvas, self.geometry_plot)
+            self.geometry_vl.addWidget(self.toolbar2)
         self.geometry_vl.canvas.figure.add_subplot(111)
         ax2f = self.geometry_vl.canvas.figure.axes[0]
         im = ax2f.contourf(self.model.deposition_coords_map_x, self.model.deposition_coords_map_y, 
@@ -464,6 +465,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.film_vl.canvas = FigureCanvas(fig)
             self.film_vl.addWidget(self.film_vl.canvas)
             self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
+            self.film_vl.addWidget(self.toolbar1)
         self.film_vl.canvas.figure.add_subplot(111)
         ax1f = self.film_vl.canvas.figure.axes[0]
         im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
