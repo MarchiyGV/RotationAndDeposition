@@ -96,6 +96,7 @@ class Model(QObject):
                  R_step = 1, #mm
                  k_step = 0.01,
                  NR_step = 0.01,
+                 R_extra_bounds = False,
                  R_min = 10, # mm
                  R_max = 70,
                  k_min = 1, 
@@ -180,11 +181,12 @@ class Model(QObject):
             self.success = False
             return False
         else:
-            if R_min < R_min_self:
-                error(f'При такой конструкции подложкодержателя и размере подложки минимальный радиус {round(R_min_self, R_decimals+1)} мм. Это значение установленно автоматически.')
-            if R_max > R_max_self:
-                error(f'При такой конструкции подложкодержателя и размере подложки максимальный радиус {round(R_max_self, R_decimals+1)} мм. Это значение установленно автоматически.')
-        if R_min>R_max:
+            if R_extra_bounds:
+                if R_min < R_min_self:
+                    error(f'При такой конструкции подложкодержателя и размере подложки минимальный радиус {round(R_min_self, R_decimals+1)} мм. Это значение установленно автоматически.')
+                if R_max > R_max_self:
+                    error(f'При такой конструкции подложкодержателя и размере подложки максимальный радиус {round(R_max_self, R_decimals+1)} мм. Это значение установленно автоматически.')
+        if R_extra_bounds and R_min>R_max:
             error('Верхняя граница R не может быть меньше нижней!')
             self.success = False
             return False
@@ -196,7 +198,10 @@ class Model(QObject):
             error('Верхняя граница NR не может быть меньше нижней!')
             self.success = False
             return False
-        self.R_bounds = (max(R_min, R_min_self), min(R_max, R_max_self)) # (min, max) mm
+        if R_extra_bounds:
+            self.R_bounds = (max(R_min, R_min_self), min(R_max, R_max_self)) # (min, max) mm
+        else: 
+            self.R_bounds = (R_min_self, R_max_self)
         self.k_bounds = (k_min, k_max) # (min, max)
         self.NR_bounds = (NR_min, NR_max)
         self.omega_s_max = omega_s_max

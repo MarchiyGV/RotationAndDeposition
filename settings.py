@@ -17,33 +17,45 @@ import numpy as np
 
 class Settings(QAbstractTableModel):
     
-    upd_signal = pyqtSignal()
-    
+    upd_signal = pyqtSignal(int)
+    index_id = 0
+    index_name = 1
+    index_variableName = 2
+    index_value = 3
+    index_units = 4
+    index_type = 5
+    index_group = 6
+    index_dependance = 7
+    index_comment = 8 
+    indexes_visible = [index_name, index_value, index_units]
+    headers = ['id', 'Параметр', 'Переменная', 'Значение', 'Единицы \nизмерения', 'Тип', 'Группа', 'Зависимость', 'Комментарий']
+         
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
         self.data = array(data, dtype=object)
         for i in range(self.data.shape[0]):
+            if self.data[i,self.index_type] == 'bool':
+                    if self.data[i, self.index_value] == 'True':
+                        self.data[i, self.index_value] = True
+                    elif self.data[i, self.index_value] == 'False':
+                        self.data[i, self.index_value] = False
+                    else: 
+                        print('error with type bool')
             for j in range(self.data.shape[1]):
                 if self.data[i,j] is nan:
                     self.data[i,j] = ''
-        self.index_id = 0
-        self.index_name = 1
-        self.index_variableName = 2
-        self.index_value = 3
-        self.index_units = 4
-        self.index_type = 5
-        self.index_group = 6
-        self.index_dependance = 7
-        self.index_comment = 8 
-        self.indexes_visible = [self.index_name, self.index_value, self.index_units]
-        self.headers = ['id', 'Параметр', 'Переменная', 'Значение', 'Единицы измерения', 'Тип', 'Группа', 'Зависимость', 'Комментарий']
-         
+
     def isVisible(self, raw):
         s = self.data[raw, self.index_dependance]
         if s:
             var, value = s.split('==')
             ind = np.argwhere(self.data[:, self.index_variableName]==var)
             var = self.data[ind, self.index_value].flatten()[0]
+            if self.data[ind, self.index_type]=='bool':
+                if value=='False':
+                    value=False
+                else:
+                    value=True
             return (var==value)
         return True
     
@@ -108,7 +120,7 @@ class Settings(QAbstractTableModel):
             value, flag = self.suit(i, value)
             if flag:
                 self.data[i][self.index_value] = value
-                self.upd_signal.emit()
+                self.upd_signal.emit(i)
                 return True
         return False
         
