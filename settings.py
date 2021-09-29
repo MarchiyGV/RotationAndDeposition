@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QModelIndex, Qt, QAbstractTableModel, pyqtSlot
+from PyQt5.QtCore import QModelIndex, Qt, QAbstractTableModel, pyqtSlot, pyqtSignal
 from PyQt5.QtWidgets import (
     QComboBox,
     QStyledItemDelegate,
@@ -13,8 +13,12 @@ from pandas import DataFrame, read_excel
 import re
 import os
 from numpy import array, nan
+import numpy as np
 
 class Settings(QAbstractTableModel):
+    
+    upd_signal = pyqtSignal()
+    
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
         self.data = array(data, dtype=object)
@@ -29,10 +33,20 @@ class Settings(QAbstractTableModel):
         self.index_units = 4
         self.index_type = 5
         self.index_group = 6
-        self.index_comment = 7 
+        self.index_dependance = 7
+        self.index_comment = 8 
         self.indexes_visible = [self.index_name, self.index_value, self.index_units]
-        self.headers = ['id', 'Параметр', 'Переменная', 'Значение', 'Единицы измерения', 'Тип', 'Группа', 'Комментарий']
+        self.headers = ['id', 'Параметр', 'Переменная', 'Значение', 'Единицы измерения', 'Тип', 'Группа', 'Зависимость', 'Комментарий']
          
+    def isVisible(self, raw):
+        s = self.data[raw, self.index_dependance]
+        if s:
+            var, value = s.split('==')
+            ind = np.argwhere(self.data[:, self.index_variableName]==var)
+            var = self.data[ind, self.index_value].flatten()[0]
+            return (var==value)
+        return True
+    
     def open_file(path):
         df = read_excel(path)
         return Settings(df)
@@ -94,7 +108,8 @@ class Settings(QAbstractTableModel):
             value, flag = self.suit(i, value)
             if flag:
                 self.data[i][self.index_value] = value
-            return True
+                self.upd_signal.emit()
+                return True
         return False
         
     def suit(self, raw_index, value):

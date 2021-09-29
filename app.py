@@ -99,6 +99,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.thick_edit.setText(str(self.h))
         self.optimiseButton.clicked.connect(self.optimisation_start)
         self.optimisationLog.setText('Log: \n')
+        self.settings.upd_signal.connect(self.update_settings_dependansies)
         
     def enable_shortcut(self, index):
         self.shortcut_deposite.setEnabled(index == 1)
@@ -129,6 +130,13 @@ class App(QMainWindow, design.Ui_MainWindow):
                 table_view.setItemDelegateForRow(i, YesNoDelegate(table_view))
             if type_ == 'filename':
                 table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view))
+                
+    @pyqtSlot()
+    def update_settings_dependansies(self):
+        for i in range(self.settings.rowCount()):
+            self.table_settings.setRowHidden(i, (not self.settings.isVisible(i)))
+        for i in range(self.settings.rowCount()):
+            self.table_settings_opt.setRowHidden(i, (not self.settings.isVisible(i)))
         
     def update_settings(self, fname):
         try:
@@ -144,7 +152,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model_settings.setSourceModel(self.settings)
         self.model_settings.setFilterKeyColumn(self.settings.index_group)
         self.model_settings.setFilterRegExp('(model)|(sys)|(numerical)')
-        #self.model_settings.sort(self.settings.index_id, Qt.AscendingOrder)
         self.table_settings.setModel(self.model_settings)
         for i in range(self.settings.columnCount()):
             self.table_settings.setColumnHidden(i, (not i in self.settings.indexes_visible))
@@ -155,16 +162,16 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.table_settings.setColumnWidth(i, self.table_settings.columnWidth(i)*resize)
         ### optimize tab
         self.opt_settings = QSortFilterProxyModel()
-        self.opt_settings.setSourceModel(self.settings)
-        
+        self.opt_settings.setSourceModel(self.settings) 
         self.opt_settings.setFilterKeyColumn(self.settings.index_group)
         self.opt_settings.setFilterRegExp('(minimisation)|(sys)|(numerical)')
-        #self.opt_settings.sort(self.settings.index_id, Qt.AscendingOrder)
         self.table_settings_opt.setModel(self.opt_settings)
         for i in range(self.settings.columnCount()):
             self.table_settings_opt.setColumnHidden(i, (not i in self.settings.indexes_visible))
         self.table_settings_opt.verticalHeader().setVisible(False)
         self.table_settings_opt.resizeColumnsToContents()
+        ### 
+        self.update_settings_dependansies()
         return True
         
     @pyqtSlot()
