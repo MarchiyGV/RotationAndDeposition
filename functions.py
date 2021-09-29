@@ -294,12 +294,17 @@ class Model(QObject):
             self.substrate_rect_x = self.substrate_radius*cos(a)
             self.substrate_rect_y = self.substrate_radius*sin(a)
             r_ = self.substrate_radius
-            rho = linspace(0, r_, num=ceil(r_*self.substrate_res))
+            m = ceil(r_*self.substrate_res)
+            if m<2:
+                m+=1
+            rho = linspace(0, r_, num=m)
             rho = rho[rho>0]
             angles = []
             rs = []
             for r in rho:
                 n = ceil(2*pi*r*self.substrate_res)
+                if n<4:
+                    n = 4
                 a = linspace(0,2*pi, num=n+1)
                 a = a[a<2*pi]
                 angles.append(a)

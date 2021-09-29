@@ -290,12 +290,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     @pyqtSlot()    
     def update_model(self):
         settings = self.settings.wrap()
-        try:
-            t = functions.Model(**settings)
-        except:
-            self.error('Неизвестная ошибка при инициализации модели')
-            self.disable_model(True)
-            return False
+        t = functions.Model(**settings)
         if t.success:
             self.model = t
             self.disable_model(False)
