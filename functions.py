@@ -4,6 +4,9 @@ from numpy import (
     log10, arcsin
     )
 import numpy as np
+from multiprocessing import Process
+from functools import partial
+from multiprocessing import Pool
 #import numpy.matlib
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import time
@@ -68,7 +71,57 @@ class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
     
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, 
+                 fname_sim='depz.txt', #path to dep profile
+                 fname_exp='depliney.txt',
+                 rotation_type = 'Planet',
+                 C=4.46,  #thickness [nm] per minute
+                 source='Experiment',
+                 magnetron_x = 0, #mm
+                 magnetron_y = 0, #mm
+                 substrate_shape = 'Circle',
+                 substrate_radius = 50, #mm
+                 substrate_x_len=100 , # Substrate width, mm
+                 substrate_y_len=100, # Substrate length, mm
+                 substrate_res=0.05, # Substrate x resolution, 1/mm
+                 cores=1, # number of jobs for paralleling
+                 verbose=True,  # True: print message each time when function of deposition called
+                 delete_cache=True, # True: delete history of function evaluations in the beggining 
+                            #of work. Warning: if = False, some changes in the code may be ignored
+                 point_tolerance=5, # needed relative tolerance for thickness in each point
+                 max_angle_divisions = 10, # limit of da while integration = 1 degree / max_angle_divisions
+                 holder_inner_radius = 20, # mm
+                 holder_outer_radius = 145, # mm
+                 deposition_len_x = 290, # mm
+                 deposition_len_y = 290, # mm
+                 deposition_res_x = 1, # 1/mm
+                 deposition_res_y = 1, # 1/mm
+                 R_step = 1, #mm
+                 k_step = 0.01,
+                 NR_step = 0.01,
+                 R_extra_bounds = False,
+                 R_min = 10, # mm
+                 R_max = 70,
+                 k_min = 1, 
+                 k_max = 50, 
+                 NR_min = 1,
+                 NR_max = 100,
+                 omega_s_max = 100,
+                 omega_p_max = 100,
+                 x0_1 = 35, #initial guess for optimisation [R0, k0]
+                 x0_2 = 4.1,
+                 x0_3 = 1,
+                 minimizer = 'NM_custom',
+                 R_mc_interval = 5, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
+                 k_mc_interval = 5, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
+                 NR_mc_interval = 15,
+                 R_min_step = 1, #step for MC >= R_min_step
+                 k_min_step = 0.01, #step for MC >= k_min_step
+                 NR_min_step = 1,
+                 mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
+                 T = 2, #"temperature" for MC algoritm
+                 parent = None
+                 ):
         super().__init__(parent)
         self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
@@ -295,23 +348,15 @@ class Model(QObject):
                                               bounds_error=False)
 
         joblib_ignore=['self']
-        
+        '''
         if rotation_type == 'Planet':
             self.xyp = self.xyp_planet
         elif rotation_type == 'Solar':
             self.xyp = self.xyp_solar
             joblib_ignore.append('k')
-            
+        '''    
         self.time_f = []
-        
-        if cores>1:
-            #ray.init()
-            #self.deposition = self.memory.cache(self.deposition_ray, ignore=['self'])
-            error('parrallel does not supported now')
-            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
-        elif cores==1:
-            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
-        else: error('incorrect parameter "cores"')
+        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.cores)
         self.success = True
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
@@ -404,72 +449,100 @@ class Model(QObject):
             self.F_axial = True
             success = True
         return success
-    '''
-    def deposition_ray(self, R, k, NR, omega):#parallel
-                t0 = time.time()
-                with Pool_ray(self.cores) as p:
-                    result = p.starmap(self.calc, [(ij, R, k, NR, omega) for ij in self.ind])
-                    I, I_err = zip(*result)
-                I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
-                t1 = time.time()
-                self.time_f.append(t1-t0)
-                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I    
-    '''      
-    def deposition_serial(self, R, k, NR, omega): #serial
-                t0 = time.time()
-                ########### INTEGRATION #################
-                I, I_err = zip(*[self.calc(i, R, k, NR, omega) for i in self.ind]) #serial
-                #I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
-                t1 = time.time()
-                self.time_f.append(t1-t0)
-                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return np.array(I)
 
-    def xyp_planet(self, i, a, R, k):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a*k + self.alpha0[i])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a*k + self.alpha0[i])
-        return x, y
-    
-    def xyp_solar(self, i, a, R, k=1):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a + self.alpha0[i])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a + self.alpha0[i])
-        return x, y
-    
-    def calc(self, i, R, k, NR, omega):
-        I, I_err = quad(lambda a: self.F(self.xyp(i, a, R, k)), 0, NR*2*pi, #scipy.integrate.quad
-                                  limit=int(round(self.max_angle_divisions*360*NR)), 
-                                  epsrel=self.point_tolerance)
-        
-        return I/(2*pi*omega), I_err/(2*pi*omega) #Jacobian time to alpha
-    '''
-    def heterogeneity(self, I):
-        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-        return max(h_1, h_2)*100
-    '''
     def heterogeneity(self, I):
         return (1-I.min()/I.max())*100
     
 class Deposition(QObject):
-    def __init__(self, R, k, NR, omega, rho, alpha, njobs=1, parent=None):
+    def __init__(self, rho, alpha, F, njobs=1, parent=None):
+        
         super().__init__(parent)
         n = len(rho)
+        rho_p = []
+        alpha_p = []
+        if njobs>n:
+            njobs = n
+        m = n//njobs
         if n%njobs == 0:
-            m = n//njobs
-            rho_p = empty(njobs)
-            alpha_p = empty(njobs)
-            for i in range(njobs-1):
-                rho_p[i] = rho[i*m:(i+1)*m]
-                alpha_p[i] = alpha[i*m:(i+1)*m]
-        self.workers = [Worker(R, k, NR, rho_p[i], alpha_p[i]) for i in njobs]
-        for worker in self.workers:
-            worker.start()
-
-class Worker()
-      
+            for i in range(njobs):
+                rho_p.append(rho[i*m:(i+1)*m])
+                alpha_p.append(alpha[i*m:(i+1)*m])
+        else:
+            k = njobs-n%njobs
+            m+=1
+            for i in range(njobs-k):
+                rho_p.append(rho[i*m:(i+1)*m])
+                alpha_p.append(alpha[i*m:(i+1)*m])
+            i0 = m*(njobs-k)
+            m-=1
+            for i in range(k):
+                rho_p.append(rho[i0+i*m:i0+(i+1)*m])
+                alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
+            
+        self.workers = [Worker(F, rho_p[i], alpha_p[i]) for i in range(njobs)]
+            
         
+    def __call__(self, R, k, NR, omega, alpha0_sub, point_tolerance, 
+                 max_angle_divisions, cores):
+        t0 = time.time()
+        if len(self.workers) == 1:
+            self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
+                                           point_tolerance, max_angle_divisions)
+            self.hs = self.workers[0]()
+            t = time.time()-t0
+            print(t)
+            return self.hs
+            
+        hs = []
+        self.procs = []
+        for worker in self.workers:
+            worker.set_properties(R, k, NR, omega, alpha0_sub,
+                                  point_tolerance, max_angle_divisions)
+
+        result = []
+        with Pool(processes=len(self.workers)) as pool:      
+            for worker in self.workers:
+                a = pool.apply_async(worker)
+                result.append(a)
+            hs = [result[i].get() for i in range(len(self.workers)) ]
+        self.hs = np.concatenate(hs)
+        t = time.time()-t0
+        print(t)
+        return self.hs
+
+
+class Worker:
+    def __init__(self, F, rho, alpha):
+        self.F = F
+        self.rho = rho
+        self.alpha = alpha
+        self.ind = range(len(rho))
+        self.hs = None
+        
+    def set_properties(self, R, k, NR, omega, alpha0_sub,
+                       point_tolerance, max_angle_divisions):
+        self.R = R
+        self.k = k
+        self.NR = NR
+        self.omega = omega
+        self.alpha0_sub = alpha0_sub
+        self.max_angle_divisions = max_angle_divisions
+        self.point_tolerance = point_tolerance
+        
+    def xyp(self, a, i):
+        x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
+        y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
+        return x, y
+        
+    def __call__(self):
+        hs = [quad(lambda a: self.F(self.xyp(a, i)), 
+                   self.alpha0_sub, self.NR*2*pi,
+                   limit=int(round(self.max_angle_divisions*360*self.NR)), 
+                   epsrel=self.point_tolerance)[0] for i in self.ind]
+        hs = np.array(hs)/(2*pi*self.omega)
+        return hs
     
+
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
     def __init__(self, model):

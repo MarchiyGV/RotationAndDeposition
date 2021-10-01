@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QKeySequence
 import matplotlib
-matplotlib.use('QT5Agg')
+
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape, mean, min)
@@ -27,12 +27,16 @@ import exception_hooks
 import design
 import functions 
 from settings import *
+from multiprocessing import Process, freeze_support
+
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 font = {'family' : 'normal',
         'size'   : 15}
 
 matplotlib.rc('font', **font)
+matplotlib.use('QT5Agg')
+
 class Task:
     def __init__(self, func_run, args_run, func_post, args_post, priority=QThread.InheritPriority):
         self.func_post = func_post
@@ -55,13 +59,17 @@ class Task:
         
     
 class Thread(QThread):
-    def __init__(self, func_run, args_run):
-        super().__init__()
+    def __init__(self, func_run, args_run, parent=None):
+        super().__init__(parent)
         self.func_run = func_run
         self.args_run = args_run
         
     def run(self):
         self.func_run(*self.args_run)
+        
+
+        
+
         
 
 class App(QMainWindow, design.Ui_MainWindow):
@@ -70,12 +78,11 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.setupUi(self) 
         self.warnbox = QErrorMessage(self)
         self.errorbox = QMessageBox(self)
-        self.deposition_task = Task(self.deposition, [], 
-                                    self.deposition_plot, [], 
-                                    QThread.TimeCriticalPriority)
+        
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
-        self.DepositionButton.clicked.connect(self.deposition_task)
+        self.DepositionButton.clicked.connect(self.deposition)
+        #self.cancel_dep_button.clicked.connect()
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
@@ -432,13 +439,23 @@ class App(QMainWindow, design.Ui_MainWindow):
         cbar = self.geometry_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04)
         cbar.set_label('nm/min')
         self.geometry_vl.canvas.draw()
-        
+    
+    @pyqtSlot()
     def deposition(self):
         self.DepositionButton.setDisabled(True)
-        self.I = self.model.deposition(self.R, self.k, self.NR, 1)
+        args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
+                self.model.point_tolerance, self.model.max_angle_divisions,
+                self.model.cores]
+        self.deposition_thread = Thread(self.model.deposition, args)
+        self.deposition_thread.finished.connect(self.deposition_plot)
+        self.deposition_thread.start()
         
+    @pyqtSlot()    
     def deposition_plot(self):
-        I = self.I
+        I = self.model.deposition.hs
+        self.DepositionButton.setDisabled(False)
+        if I is None:
+            return False
         het = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
@@ -477,7 +494,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         cbar.set_label('% $h_{max}$')
         ax1f.set_aspect('equal')
         self.film_vl.canvas.draw()
-        self.DepositionButton.setDisabled(False)
+        
         
     @pyqtSlot()    
     def optimisation_start(self):
@@ -513,5 +530,6 @@ def main():
     sys.exit(app.exec_())
         
 if __name__ == '__main__': 
+    freeze_support()
     import sys
     main()
