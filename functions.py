@@ -68,57 +68,8 @@ class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
     
-    def __init__(self, 
-                 fname_sim='depz.txt', #path to dep profile
-                 fname_exp='depliney.txt',
-                 rotation_type = 'Planet',
-                 C=4.46,  #thickness [nm] per minute
-                 source='Experiment',
-                 magnetron_x = 0, #mm
-                 magnetron_y = 0, #mm
-                 substrate_shape = 'Circle',
-                 substrate_radius = 50, #mm
-                 substrate_x_len=100 , # Substrate width, mm
-                 substrate_y_len=100, # Substrate length, mm
-                 substrate_res=0.05, # Substrate x resolution, 1/mm
-                 cores=1, # number of jobs for paralleling
-                 verbose=True,  # True: print message each time when function of deposition called
-                 delete_cache=True, # True: delete history of function evaluations in the beggining 
-                            #of work. Warning: if = False, some changes in the code may be ignored
-                 point_tolerance=5, # needed relative tolerance for thickness in each point
-                 max_angle_divisions = 10, # limit of da while integration = 1 degree / max_angle_divisions
-                 holder_inner_radius = 20, # mm
-                 holder_outer_radius = 145, # mm
-                 deposition_len_x = 290, # mm
-                 deposition_len_y = 290, # mm
-                 deposition_res_x = 1, # 1/mm
-                 deposition_res_y = 1, # 1/mm
-                 R_step = 1, #mm
-                 k_step = 0.01,
-                 NR_step = 0.01,
-                 R_extra_bounds = False,
-                 R_min = 10, # mm
-                 R_max = 70,
-                 k_min = 1, 
-                 k_max = 50, 
-                 NR_min = 1,
-                 NR_max = 100,
-                 omega_s_max = 100,
-                 omega_p_max = 100,
-                 x0_1 = 35, #initial guess for optimisation [R0, k0]
-                 x0_2 = 4.1,
-                 x0_3 = 1,
-                 minimizer = 'NM_custom',
-                 R_mc_interval = 5, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
-                 k_mc_interval = 5, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
-                 NR_mc_interval = 15,
-                 R_min_step = 1, #step for MC >= R_min_step
-                 k_min_step = 0.01, #step for MC >= k_min_step
-                 NR_min_step = 1,
-                 mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
-                 T = 2 #"temperature" for MC algoritm
-                 ):
-        QObject.__init__(self)
+    def __init__(self, parent=None, **kwargs):
+        super().__init__(parent)
         self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
         self.count = 0
@@ -500,15 +451,24 @@ class Model(QObject):
     def heterogeneity(self, I):
         return (1-I.min()/I.max())*100
     
-    def grid_I(self, I):
-        I_grid = np.zeros((self.substrate_rows, self.substrate_columns))
-        dy = self.substrate_y_len/(self.substrate_rows-1)
-        dx = self.substrate_x_len/(self.substrate_columns-1)
-        for ind in self.ind:
-            i = int(ceil((self.substrate_y_len/2+self.ys[ind])/dy))
-            j = int(ceil((self.substrate_x_len/2+self.xs[ind])/dx))
-            I_grid[i, j] = I[ind]
-        return I_grid
+class Deposition(QObject):
+    def __init__(self, R, k, NR, omega, rho, alpha, njobs=1, parent=None):
+        super().__init__(parent)
+        n = len(rho)
+        if n%njobs == 0:
+            m = n//njobs
+            rho_p = empty(njobs)
+            alpha_p = empty(njobs)
+            for i in range(njobs-1):
+                rho_p[i] = rho[i*m:(i+1)*m]
+                alpha_p[i] = alpha[i*m:(i+1)*m]
+        self.workers = [Worker(R, k, NR, rho_p[i], alpha_p[i]) for i in njobs]
+        for worker in self.workers:
+            worker.start()
+
+class Worker()
+      
+        
     
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
