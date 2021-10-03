@@ -1,13 +1,9 @@
 from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
-    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean, 
-    log10, arcsin
+    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, log10, arcsin
     )
 import numpy as np
-from multiprocessing import Process
-from functools import partial
 from multiprocessing import Pool
-#import numpy.matlib
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import time
 from scipy.integrate import quad
@@ -71,57 +67,18 @@ class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
     
-    def __init__(self, 
-                 fname_sim='depz.txt', #path to dep profile
-                 fname_exp='depliney.txt',
-                 rotation_type = 'Planet',
-                 C=4.46,  #thickness [nm] per minute
-                 source='Experiment',
-                 magnetron_x = 0, #mm
-                 magnetron_y = 0, #mm
-                 substrate_shape = 'Circle',
-                 substrate_radius = 50, #mm
-                 substrate_x_len=100 , # Substrate width, mm
-                 substrate_y_len=100, # Substrate length, mm
-                 substrate_res=0.05, # Substrate x resolution, 1/mm
-                 cores=1, # number of jobs for paralleling
-                 verbose=True,  # True: print message each time when function of deposition called
-                 delete_cache=True, # True: delete history of function evaluations in the beggining 
-                            #of work. Warning: if = False, some changes in the code may be ignored
-                 point_tolerance=5, # needed relative tolerance for thickness in each point
-                 max_angle_divisions = 10, # limit of da while integration = 1 degree / max_angle_divisions
-                 holder_inner_radius = 20, # mm
-                 holder_outer_radius = 145, # mm
-                 deposition_len_x = 290, # mm
-                 deposition_len_y = 290, # mm
-                 deposition_res_x = 1, # 1/mm
-                 deposition_res_y = 1, # 1/mm
-                 R_step = 1, #mm
-                 k_step = 0.01,
-                 NR_step = 0.01,
-                 R_extra_bounds = False,
-                 R_min = 10, # mm
-                 R_max = 70,
-                 k_min = 1, 
-                 k_max = 50, 
-                 NR_min = 1,
-                 NR_max = 100,
-                 omega_s_max = 100,
-                 omega_p_max = 100,
-                 x0_1 = 35, #initial guess for optimisation [R0, k0]
-                 x0_2 = 4.1,
-                 x0_3 = 1,
-                 minimizer = 'NM_custom',
-                 R_mc_interval = 5, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
-                 k_mc_interval = 5, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
-                 NR_mc_interval = 15,
-                 R_min_step = 1, #step for MC >= R_min_step
-                 k_min_step = 0.01, #step for MC >= k_min_step
-                 NR_min_step = 1,
-                 mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
-                 T = 2, #"temperature" for MC algoritm
-                 parent = None
-                 ):
+    def __init__(self,
+                 fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
+                 magnetron_y, substrate_shape, substrate_radius, 
+                 substrate_x_len, substrate_y_len, substrate_res, cores, 
+                 verbose, delete_cache, point_tolerance, max_angle_divisions, 
+                 holder_inner_radius, holder_outer_radius, deposition_len_x, 
+                 deposition_len_y, R_step,
+                 k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
+                 NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
+                 minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
+                 R_min_step, k_min_step, NR_min_step, mc_iter, T, parent = None):
+        
         super().__init__(parent)
         self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
@@ -158,8 +115,6 @@ class Model(QObject):
         self.holder_outer_radius = holder_outer_radius  # radius sampleholder, mm
         self.deposition_len_x = deposition_len_x # mm
         self.deposition_len_y = deposition_len_y # mm
-        self.deposition_res_x = deposition_res_x # 1/mm
-        self.deposition_res_y = deposition_res_y # 1/mm
         self.R_step = R_step
         R_decimals = int(log10(1/self.R_step))
         self.k_step = k_step
@@ -224,6 +179,7 @@ class Model(QObject):
                                                 "ftol":0.01, 'maxfev':500, 
                                                 "direc": array([[1,0.01, 0.1],[-1,0.01,-0.1]])}, #np.array
                                                 "bounds":(self.R_bounds, self.k_bounds, self.NR_bounds)}
+        
         minimizers = {'NM':NM, 'NM_custom':NM_custom, 'Powell':Powell}
         self.minimizer = minimizers[minimizer]
         self.R_mc_interval = R_mc_interval/100 #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
@@ -509,7 +465,7 @@ class Deposition(QObject):
         t = time.time()-t0
         print(t)
         return self.hs
-
+    
 
 class Worker:
     def __init__(self, F, rho, alpha):
@@ -545,65 +501,98 @@ class Worker:
 
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
-    def __init__(self, model):
-        QObject.__init__(self)
-        self.model = model
-        self.log = ''
+    def __init__(self, deposition, parent=None):
+        super().__init__(parent)
+        self.deposition = deposition
         
-    def optimisation(self):
-        self.log = ''
+    def optimisation(self, heterogeneity,
+                     alpha0_sub, point_tolerance, max_angle_divisions, cores, 
+                     R_bounds, k_bounds, NR_bounds, 
+                     R_min_step, k_min_step, NR_min_step, 
+                     R_step, k_step, NR_step,
+                     R_mc_interval, k_mc_interval, NR_mc_interval, x0, 
+                     minimizer, mc_iter, T, verbose):
         t0 = time.time()
-        mytakestep = custom_minimizer.CustomTakeStep(
-                                (self.model.R_bounds[1]-self.model.R_bounds[0])*self.model.R_mc_interval, 
-                                (self.model.k_bounds[1]-self.model.k_bounds[0])*self.model.k_mc_interval, 
-                                (self.model.NR_bounds[1]-self.model.NR_bounds[0])*self.model.NR_mc_interval, 
-                                self.model.R_min_step, self.model.k_min_step, self.model.NR_min_step, 
-                                self.model.R_bounds, self.model.k_bounds, self.model.NR_bounds)
+        self.heterogeneity = heterogeneity
+        self.count = 0
+        self.mc_count = 0
+        self.log = ''
+        self.alpha0_sub = alpha0_sub
+        self.point_tolerance = point_tolerance
+        self.max_angle_divisions = max_angle_divisions
+        self.cores = cores
+        self.R_bounds = R_bounds
+        self.k_bounds = k_bounds
+        self.NR_bounds = NR_bounds
+        self.R_step = R_step
+        self.k_step = k_step
+        self.NR_step = NR_step
+        self.R_min_step = R_min_step
+        self.k_min_step = k_min_step
+        self.NR_min_step = NR_min_step
+        self.R_mc_interval = R_mc_interval
+        self.k_mc_interval = k_mc_interval
+        self.NR_mc_interval = NR_mc_interval
+        self.x0 = x0
+        self.minimizer = minimizer
+        self.mc_iter = mc_iter
+        self.T = T
+        self.verbose = verbose
         
-        mybounds = custom_minimizer.CustomBounds(self.model.R_bounds, 
-                                                 self.model.k_bounds, 
-                                                 self.model.NR_bounds)
+        takestep = custom_minimizer.CustomTakeStep(self.R_mc_interval, 
+                                                     self.k_mc_interval, 
+                                                     self.NR_mc_interval, 
+                                                     self.R_min_step, 
+                                                     self.k_min_step, 
+                                                     self.NR_min_step, 
+                                                     self.R_bounds, 
+                                                     self.k_bounds, 
+                                                     self.NR_bounds)
+        
+        bounds = custom_minimizer.CustomBounds(self.R_bounds, 
+                                                 self.k_bounds, 
+                                                 self.NR_bounds)
     
-        ret = basinhopping(self.func, self.model.x0, minimizer_kwargs=self.model.minimizer, 
-                           niter=self.model.mc_iter, callback=self.print_fun, 
-                           take_step=mytakestep, T=self.model.T, accept_test=mybounds)
+        ret = basinhopping(self.func, self.x0, minimizer_kwargs=self.minimizer, 
+                           niter=self.mc_iter, callback=self.print_fun, 
+                           take_step=takestep, T=self.T, accept_test=bounds)
     
         R, k, NR = ret.x
         h = ret.fun #heterogeneity
         message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)    
-        I = self.model.deposition(R, k, NR, 1)
         t1 = time.time()        
-        message +='\nFull time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.model.time_f), mean(self.model.time_f))
-        print(message)
+        message +='\nFull time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, self.count, (t1-t0)/self.count)
         self.log += (message+'\n')
         self.upd_signal.emit(message)
-        return I    
+        return True    
     
     def func(self, x):
+        self.count += 1
         c = 0
         gate=100
-        delta=(0.1, 0.01)
-        if x[0]<self.model.R_bounds[0]+delta[0]:
-            c+=gate*(self.model.R_bounds[0]+delta[0]-x[0])
-        if x[0]>self.model.R_bounds[1]-delta[0]:  
-            c+=gate*(x[0]+delta[0]-self.model.R_bounds[0])
-        if x[1]<self.model.k_bounds[0]+delta[1]:
-            c+=gate*(self.model.k_bounds[0]+delta[1]-x[1])
-        if x[1]>self.model.k_bounds[1]-delta[1]:  
-            c+=gate*(x[1]+delta[1]-self.model.k_bounds[0])
-        h = self.model.heterogeneity(self.model.deposition(*x, 1))
-        if self.model.verbose: 
+        delta=(self.R_step*2, self.k_step*2)
+        if x[0]<self.R_bounds[0]+delta[0]:
+            c+=gate*(self.R_bounds[0]+delta[0]-x[0])
+        if x[0]>self.R_bounds[1]-delta[0]:  
+            c+=gate*(x[0]+delta[0]-self.R_bounds[0])
+        if x[1]<self.k_bounds[0]+delta[1]:
+            c+=gate*(self.k_bounds[0]+delta[1]-x[1])
+        if x[1]>self.k_bounds[1]-delta[1]:  
+            c+=gate*(x[1]+delta[1]-self.k_bounds[0])
+        args = [*x, 1, self.alpha0_sub, self.point_tolerance, 
+                self.max_angle_divisions, self.cores]
+        h = self.heterogeneity(self.deposition(*args))
+        if self.verbose: 
             message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)
-            print(message)
             self.log += (message+'\n')
             self.upd_signal.emit(message)
+            
         return c+h
     
     def print_fun(self, x, f, accepted):
-        self.model.count+=1
+        self.mc_count+=1
         if accepted == 1: s = 'accepted'
         else: s = 'rejected' 
-        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.model.count, 1+self.model.mc_iter, f, *x, s)
-        print(message)
+        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.mc_count, 1+self.mc_iter, f, *x, s)
         self.log += (message+'\n')
         self.upd_signal.emit(message)

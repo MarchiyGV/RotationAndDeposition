@@ -4,11 +4,11 @@ import numpy
 import scipy.optimize as sp_opt
 
 class CustomTakeStep:
-   def __init__(self, R_max_step, k_max_step, NR_max_step, R_min_step, 
+   def __init__(self, R_mc_interval, k_mc_interval, NR_mc_interval, R_min_step, 
                 k_min_step, NR_min_step, R_bounds, k_bounds, NR_bounds):
-       self.R_max_step = R_max_step
-       self.k_max_step = k_max_step
-       self.NR_max_step = NR_max_step
+       self.R_max_step = (R_bounds[1]-R_bounds[0])*R_mc_interval
+       self.k_max_step = (k_bounds[1]-k_bounds[0])*k_mc_interval
+       self.NR_max_step = (NR_bounds[1]-NR_bounds[0])*R_mc_interval
        self.R_min_step = R_min_step
        self.k_min_step = k_min_step
        self.NR_min_step = NR_min_step

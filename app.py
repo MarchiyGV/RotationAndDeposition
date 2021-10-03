@@ -36,29 +36,19 @@ font = {'family' : 'normal',
 
 matplotlib.rc('font', **font)
 matplotlib.use('QT5Agg')
-
-class Task:
-    def __init__(self, func_run, args_run, func_post, args_post, priority=QThread.InheritPriority):
-        self.func_post = func_post
-        self.args_post = args_post
-        self.thread = Thread(func_run, args_run)
-        self.thread.finished.connect(self.post)
-        self.priority = priority
-    
-    @pyqtSlot()
-    def __call__(self):
-        self.thread.start(self.priority)
-    
-    def kill(self):
-        time.sleep(0.3)
-        self.thread.terminate()
-        self.thread.exit()
-        
-    def post(self):
-        self.func_post(*self.args_post)
-        
     
 class Thread(QThread):
+    msg = pyqtSignal(str)
+    def __init__(self, func_run, args_run, parent=None):
+        super().__init__(parent)
+        self.func_run = func_run
+        self.args_run = args_run
+        
+    def run(self):
+        self.func_run(*self.args_run)
+        
+class Opt(QThread):
+    msg = pyqtSignal(str)
     def __init__(self, func_run, args_run, parent=None):
         super().__init__(parent)
         self.func_run = func_run
@@ -68,21 +58,16 @@ class Thread(QThread):
         self.func_run(*self.args_run)
         
 
-        
-
-        
-
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
         self.warnbox = QErrorMessage(self)
         self.errorbox = QMessageBox(self)
-        
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.DepositionButton.clicked.connect(self.deposition)
-        #self.cancel_dep_button.clicked.connect()
+        self.cancel_dep_button.clicked.connect(self.deposition_stop)
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
@@ -113,7 +98,7 @@ class App(QMainWindow, design.Ui_MainWindow):
 
         self.h = 100
         self.thick_edit.setText(str(self.h))
-        self.optimiseButton.clicked.connect(self.optimisation_start)
+        self.optimiseButton.clicked.connect(self.optimisation)
         self.optimisationLog.setText('Log: \n')
         self.settings.upd_signal.connect(self.update_settings_dependansies)
         self.settings.upd_signal.connect(self.select) #fix one strange problem
@@ -312,6 +297,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         else:
             self.k_Slider.setDisabled(False)
             self.k_disp.setDisabled(False)
+        self.optimizer = functions.Optimizer(self.model.deposition)
         self.disable_model(False)
         self.model.warn_signal.connect(self.warn)
         self.update_sliders()
@@ -443,81 +429,100 @@ class App(QMainWindow, design.Ui_MainWindow):
     @pyqtSlot()
     def deposition(self):
         self.DepositionButton.setDisabled(True)
+        self.cancel_dep_button.setDisabled(False)
         args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
                 self.model.point_tolerance, self.model.max_angle_divisions,
                 self.model.cores]
         self.deposition_thread = Thread(self.model.deposition, args)
         self.deposition_thread.finished.connect(self.deposition_plot)
+        self.dep_flag = True
         self.deposition_thread.start()
+    
+    @pyqtSlot()
+    def deposition_stop(self):
+        self.dep_flag = False
+        self.deposition_thread.terminate()        
         
     @pyqtSlot()    
     def deposition_plot(self):
-        I = self.model.deposition.hs
         self.DepositionButton.setDisabled(False)
-        if I is None:
-            return False
-        het = self.model.heterogeneity(I)
-        thickness = I.mean()
-        omega = thickness/self.h
-        self.deposition_output.setText('')
-        self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
-        n = int(ceil(log10(1/omega)))
-        if n <= omega_decimals:
-            self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
-        else:
-            self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
-        if omega>self.model.omega_s_max:
-            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
-        if omega*self.k>self.model.omega_p_max:
-            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
-        try: 
-            self.film_vl.canvas.figure.clf()
-        except:
-            fig = Figure()
-            self.film_vl.canvas = FigureCanvas(fig)
-            self.film_vl.addWidget(self.film_vl.canvas)
-            self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
-            self.film_vl.addWidget(self.toolbar1)
-        self.film_vl.canvas.figure.add_subplot(111)
-        ax1f = self.film_vl.canvas.figure.axes[0]
-        im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
-        ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
-                  color='black', linewidth=7)
-        ax1f.set_xlabel('x, mm')
-        ax1f.set_ylabel('y, mm')
-        import matplotlib.ticker as ticker
-        @ticker.FuncFormatter
-        def major_formatter(x, pos):
-            return "%d" % (x*100)
-        cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
-                                                   format=major_formatter)
-        cbar.set_label('% $h_{max}$')
-        ax1f.set_aspect('equal')
-        self.film_vl.canvas.draw()
+        self.cancel_dep_button.setDisabled(True)
+        if self.dep_flag:
+            I = self.model.deposition.hs
+            
+            if I is None:
+                return False
+            het = self.model.heterogeneity(I)
+            thickness = I.mean()
+            omega = thickness/self.h
+            self.deposition_output.setText('')
+            self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
+            n = int(ceil(log10(1/omega)))
+            if n <= omega_decimals:
+                self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
+            else:
+                self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
+            if omega>self.model.omega_s_max:
+                self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
+            if omega*self.k>self.model.omega_p_max:
+                self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
+            try: 
+                self.film_vl.canvas.figure.clf()
+            except:
+                fig = Figure()
+                self.film_vl.canvas = FigureCanvas(fig)
+                self.film_vl.addWidget(self.film_vl.canvas)
+                self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
+                self.film_vl.addWidget(self.toolbar1)
+            self.film_vl.canvas.figure.add_subplot(111)
+            ax1f = self.film_vl.canvas.figure.axes[0]
+            im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
+            ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
+                      color='black', linewidth=7)
+            ax1f.set_xlabel('x, mm')
+            ax1f.set_ylabel('y, mm')
+            import matplotlib.ticker as ticker
+            @ticker.FuncFormatter
+            def major_formatter(x, pos):
+                return "%d" % (x*100)
+            cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
+                                                       format=major_formatter)
+            cbar.set_label('% $h_{max}$')
+            ax1f.set_aspect('equal')
+            self.film_vl.canvas.draw()
         
         
     @pyqtSlot()    
-    def optimisation_start(self):
-        success = self.update_model()
-        if success:            
-            self.optimisation_task = Task(self.optimisation, [], 
-                                        self.optimisation_output, [], 
-                                        QThread.TimeCriticalPriority)
-            
-            self.cancelOptimiseButton.clicked.connect(self.optimisation_task.kill)
-            self.optimisationLog.setText('Log: \n')    
-            self.optimiseButton.setDisabled(True)
-            self.cancelOptimiseButton.setDisabled(False)
-            self.optimisation_task()
+    def optimisation(self): 
+        self.optimiseButton.setDisabled(True)
+        self.cancelOptimiseButton.setDisabled(False)      
+        self.optimisationLog.setText('Log: \n') 
+        args = [self.model.heterogeneity, self.model.alpha0_sub, 
+                self.model.point_tolerance, self.model.max_angle_divisions, 
+                self.model.cores, 
+                self.model.R_bounds, self.model.k_bounds, self.model.NR_bounds, 
+                self.model.R_min_step, self.model.k_min_step, 
+                self.model.NR_min_step, 
+                self.model.R_step, self.model.k_step, self.model.NR_step,
+                self.model.R_mc_interval, self.model.k_mc_interval, 
+                self.model.NR_mc_interval, self.model.x0, self.model.minimizer, 
+                self.model.mc_iter, self.model.T, self.model.verbose]
+        self.optimisation_thread = Thread(self.optimizer.optimisation, args)
+        self.cancelOptimiseButton.clicked.connect(self.optimisation_stop)
+        self.optimisation_thread.finished.connect(self.optimisation_output)
+        self.optimisation_thread.msg.connect(self.optimisation_log)
+        self.optimizer.upd_signal.connect(self.optimisation_log)
+        self.optimisation_thread.start()
 
-    def optimisation(self):
-        opt = functions.Optimizer(self.model)
-        opt.upd_signal.connect(self.update_log)
-        opt.optimisation()
-    
-    def update_log(self, message):
+    @pyqtSlot(str)
+    def optimisation_log(self, message):
         self.optimisationLog.append(message)
         
+    @pyqtSlot()
+    def optimisation_stop(self):
+        self.optimisation_thread.terminate()
+        
+    @pyqtSlot()    
     def optimisation_output(self):
         self.optimiseButton.setDisabled(False)
         self.cancelOptimiseButton.setDisabled(True)
