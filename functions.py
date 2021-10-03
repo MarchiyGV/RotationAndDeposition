@@ -1,10 +1,9 @@
 from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
-    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, reshape, mean, 
-    log10, arcsin
+    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, log10, arcsin
     )
 import numpy as np
-#import numpy.matlib
+from multiprocessing import Pool
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import time
 from scipy.integrate import quad
@@ -68,57 +67,19 @@ class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
     
-    def __init__(self, 
-                 fname_sim='depz.txt', #path to dep profile
-                 fname_exp='depliney.txt',
-                 rotation_type = 'Planet',
-                 C=4.46,  #thickness [nm] per minute
-                 source='Experiment',
-                 magnetron_x = 0, #mm
-                 magnetron_y = 0, #mm
-                 substrate_shape = 'Circle',
-                 substrate_radius = 50, #mm
-                 substrate_x_len=100 , # Substrate width, mm
-                 substrate_y_len=100, # Substrate length, mm
-                 substrate_res=0.05, # Substrate x resolution, 1/mm
-                 cores=1, # number of jobs for paralleling
-                 verbose=True,  # True: print message each time when function of deposition called
-                 delete_cache=True, # True: delete history of function evaluations in the beggining 
-                            #of work. Warning: if = False, some changes in the code may be ignored
-                 point_tolerance=5, # needed relative tolerance for thickness in each point
-                 max_angle_divisions = 10, # limit of da while integration = 1 degree / max_angle_divisions
-                 holder_inner_radius = 20, # mm
-                 holder_outer_radius = 145, # mm
-                 deposition_len_x = 290, # mm
-                 deposition_len_y = 290, # mm
-                 deposition_res_x = 1, # 1/mm
-                 deposition_res_y = 1, # 1/mm
-                 R_step = 1, #mm
-                 k_step = 0.01,
-                 NR_step = 0.01,
-                 R_extra_bounds = False,
-                 R_min = 10, # mm
-                 R_max = 70,
-                 k_min = 1, 
-                 k_max = 50, 
-                 NR_min = 1,
-                 NR_max = 100,
-                 omega_s_max = 100,
-                 omega_p_max = 100,
-                 x0_1 = 35, #initial guess for optimisation [R0, k0]
-                 x0_2 = 4.1,
-                 x0_3 = 1,
-                 minimizer = 'NM_custom',
-                 R_mc_interval = 5, #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
-                 k_mc_interval = 5, #step for MC <= k_mc_interval*(k_max_bound-k_min_bound)\
-                 NR_mc_interval = 15,
-                 R_min_step = 1, #step for MC >= R_min_step
-                 k_min_step = 0.01, #step for MC >= k_min_step
-                 NR_min_step = 1,
-                 mc_iter = 2, # number of Monte-Carlo algoritm's iterations (number of visited local minima) 
-                 T = 2 #"temperature" for MC algoritm
-                 ):
-        QObject.__init__(self)
+    def __init__(self,
+                 fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
+                 magnetron_y, substrate_shape, substrate_radius, 
+                 substrate_x_len, substrate_y_len, substrate_res, cores, 
+                 verbose, delete_cache, point_tolerance, max_angle_divisions, 
+                 holder_inner_radius, holder_outer_radius, deposition_len_x, 
+                 deposition_len_y, R_step,
+                 k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
+                 NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
+                 minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
+                 R_min_step, k_min_step, NR_min_step, mc_iter, T, parent = None):
+        
+        super().__init__(parent)
         self.errorbox = QtWidgets.QErrorMessage()
         self.memory = Memory('cache', verbose=0)
         self.count = 0
@@ -154,8 +115,6 @@ class Model(QObject):
         self.holder_outer_radius = holder_outer_radius  # radius sampleholder, mm
         self.deposition_len_x = deposition_len_x # mm
         self.deposition_len_y = deposition_len_y # mm
-        self.deposition_res_x = deposition_res_x # 1/mm
-        self.deposition_res_y = deposition_res_y # 1/mm
         self.R_step = R_step
         R_decimals = int(log10(1/self.R_step))
         self.k_step = k_step
@@ -220,6 +179,7 @@ class Model(QObject):
                                                 "ftol":0.01, 'maxfev':500, 
                                                 "direc": array([[1,0.01, 0.1],[-1,0.01,-0.1]])}, #np.array
                                                 "bounds":(self.R_bounds, self.k_bounds, self.NR_bounds)}
+        
         minimizers = {'NM':NM, 'NM_custom':NM_custom, 'Powell':Powell}
         self.minimizer = minimizers[minimizer]
         self.R_mc_interval = R_mc_interval/100 #step for MC <= R_mc_interval*(R_max_bound-R_min_bound)
@@ -344,23 +304,15 @@ class Model(QObject):
                                               bounds_error=False)
 
         joblib_ignore=['self']
-        
+        '''
         if rotation_type == 'Planet':
             self.xyp = self.xyp_planet
         elif rotation_type == 'Solar':
             self.xyp = self.xyp_solar
             joblib_ignore.append('k')
-            
+        '''    
         self.time_f = []
-        
-        if cores>1:
-            #ray.init()
-            #self.deposition = self.memory.cache(self.deposition_ray, ignore=['self'])
-            error('parrallel does not supported now')
-            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
-        elif cores==1:
-            self.deposition = self.memory.cache(self.deposition_serial, ignore=joblib_ignore)           
-        else: error('incorrect parameter "cores"')
+        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.cores)
         self.success = True
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
@@ -453,124 +405,195 @@ class Model(QObject):
             self.F_axial = True
             success = True
         return success
-    '''
-    def deposition_ray(self, R, k, NR, omega):#parallel
-                t0 = time.time()
-                with Pool_ray(self.cores) as p:
-                    result = p.starmap(self.calc, [(ij, R, k, NR, omega) for ij in self.ind])
-                    I, I_err = zip(*result)
-                I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0]))) #np.reshape
-                t1 = time.time()
-                self.time_f.append(t1-t0)
-                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return I    
-    '''      
-    def deposition_serial(self, R, k, NR, omega): #serial
-                t0 = time.time()
-                ########### INTEGRATION #################
-                I, I_err = zip(*[self.calc(i, R, k, NR, omega) for i in self.ind]) #serial
-                #I = reshape(I, (len(self.substrate_coords_map_x), len(self.substrate_coords_map_x[0])))
-                t1 = time.time()
-                self.time_f.append(t1-t0)
-                if self.verbose: print('%d calculation func called. computation time: %.1f s' % (len(self.time_f), self.time_f[-1]))
-                return np.array(I)
 
-    def xyp_planet(self, i, a, R, k):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a*k + self.alpha0[i])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a*k + self.alpha0[i])
-        return x, y
-    
-    def xyp_solar(self, i, a, R, k=1):
-        x = R*cos(a+self.alpha0_sub)+self.rho[i]*cos(a + self.alpha0[i])
-        y = R*sin(a+self.alpha0_sub)+self.rho[i]*sin(a + self.alpha0[i])
-        return x, y
-    
-    def calc(self, i, R, k, NR, omega):
-        I, I_err = quad(lambda a: self.F(self.xyp(i, a, R, k)), 0, NR*2*pi, #scipy.integrate.quad
-                                  limit=int(round(self.max_angle_divisions*360*NR)), 
-                                  epsrel=self.point_tolerance)
-        
-        return I/(2*pi*omega), I_err/(2*pi*omega) #Jacobian time to alpha
-    '''
-    def heterogeneity(self, I):
-        h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
-        h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
-        return max(h_1, h_2)*100
-    '''
     def heterogeneity(self, I):
         return (1-I.min()/I.max())*100
     
-    def grid_I(self, I):
-        I_grid = np.zeros((self.substrate_rows, self.substrate_columns))
-        dy = self.substrate_y_len/(self.substrate_rows-1)
-        dx = self.substrate_x_len/(self.substrate_columns-1)
-        for ind in self.ind:
-            i = int(ceil((self.substrate_y_len/2+self.ys[ind])/dy))
-            j = int(ceil((self.substrate_x_len/2+self.xs[ind])/dx))
-            I_grid[i, j] = I[ind]
-        return I_grid
+class Deposition(QObject):
     
+    def __init__(self, rho, alpha, F, njobs=1, parent=None):
+        super().__init__(parent)
+        self.time = []
+        n = len(rho)
+        rho_p = []
+        alpha_p = []
+        if njobs>n:
+            njobs = n
+        m = n//njobs
+        if n%njobs == 0:
+            for i in range(njobs):
+                rho_p.append(rho[i*m:(i+1)*m])
+                alpha_p.append(alpha[i*m:(i+1)*m])
+        else:
+            k = njobs-n%njobs
+            m+=1
+            for i in range(njobs-k):
+                rho_p.append(rho[i*m:(i+1)*m])
+                alpha_p.append(alpha[i*m:(i+1)*m])
+            i0 = m*(njobs-k)
+            m-=1
+            for i in range(k):
+                rho_p.append(rho[i0+i*m:i0+(i+1)*m])
+                alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
+            
+        self.workers = [Worker(F, rho_p[i], alpha_p[i]) for i in range(njobs)]
+            
+        
+    def __call__(self, R, k, NR, omega, alpha0_sub, point_tolerance, 
+                 max_angle_divisions, cores):
+        t0 = time.time()
+        if len(self.workers) == 1:
+            self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
+                                           point_tolerance, max_angle_divisions)
+            self.hs = self.workers[0]()
+            t = time.time()-t0
+            self.time.append(t)
+            return self.hs
+            
+        hs = []
+        self.procs = []
+        for worker in self.workers:
+            worker.set_properties(R, k, NR, omega, alpha0_sub,
+                                  point_tolerance, max_angle_divisions)
+
+        result = []
+        with Pool(processes=len(self.workers)) as pool:      
+            for worker in self.workers:
+                a = pool.apply_async(worker)
+                result.append(a)
+            hs = [result[i].get() for i in range(len(self.workers)) ]
+        self.hs = np.concatenate(hs)
+        t = time.time()-t0
+        self.time.append(t)
+        return self.hs
+    
+
+class Worker:
+    def __init__(self, F, rho, alpha):
+        self.F = F
+        self.rho = rho
+        self.alpha = alpha
+        self.ind = range(len(rho))
+        self.hs = None
+        
+    def set_properties(self, R, k, NR, omega, alpha0_sub,
+                       point_tolerance, max_angle_divisions):
+        self.R = R
+        self.k = k
+        self.NR = NR
+        self.omega = omega
+        self.alpha0_sub = alpha0_sub
+        self.max_angle_divisions = max_angle_divisions
+        self.point_tolerance = point_tolerance
+        
+    def xyp(self, a, i):
+        x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
+        y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
+        return x, y
+        
+    def __call__(self):
+        hs = [quad(lambda a: self.F(self.xyp(a, i)), 
+                   self.alpha0_sub, self.NR*2*pi,
+                   limit=int(round(self.max_angle_divisions*360*self.NR)), 
+                   epsrel=self.point_tolerance)[0] for i in self.ind]
+        hs = np.array(hs)/(2*pi*self.omega)
+        return hs
+    
+
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
-    def __init__(self, model):
-        QObject.__init__(self)
-        self.model = model
-        self.log = ''
+    def __init__(self, deposition, parent=None):
+        super().__init__(parent)
+        self.deposition = deposition
         
-    def optimisation(self):
-        self.log = ''
+    def optimisation(self, heterogeneity,
+                     alpha0_sub, point_tolerance, max_angle_divisions, cores, 
+                     R_bounds, k_bounds, NR_bounds, 
+                     R_min_step, k_min_step, NR_min_step, 
+                     R_step, k_step, NR_step,
+                     R_mc_interval, k_mc_interval, NR_mc_interval, x0, 
+                     minimizer, mc_iter, T, verbose):
         t0 = time.time()
-        mytakestep = custom_minimizer.CustomTakeStep(
-                                (self.model.R_bounds[1]-self.model.R_bounds[0])*self.model.R_mc_interval, 
-                                (self.model.k_bounds[1]-self.model.k_bounds[0])*self.model.k_mc_interval, 
-                                (self.model.NR_bounds[1]-self.model.NR_bounds[0])*self.model.NR_mc_interval, 
-                                self.model.R_min_step, self.model.k_min_step, self.model.NR_min_step, 
-                                self.model.R_bounds, self.model.k_bounds, self.model.NR_bounds)
+        self.heterogeneity = heterogeneity
+        self.count = 0
+        self.mc_count = 0
+        self.log = ''
+        self.alpha0_sub = alpha0_sub
+        self.point_tolerance = point_tolerance
+        self.max_angle_divisions = max_angle_divisions
+        self.cores = cores
+        self.R_bounds = R_bounds
+        self.k_bounds = k_bounds
+        self.NR_bounds = NR_bounds
+        self.R_step = R_step
+        self.k_step = k_step
+        self.NR_step = NR_step
+        self.R_min_step = R_min_step
+        self.k_min_step = k_min_step
+        self.NR_min_step = NR_min_step
+        self.R_mc_interval = R_mc_interval
+        self.k_mc_interval = k_mc_interval
+        self.NR_mc_interval = NR_mc_interval
+        self.x0 = x0
+        self.minimizer = minimizer
+        self.mc_iter = mc_iter
+        self.T = T
+        self.verbose = verbose
         
-        mybounds = custom_minimizer.CustomBounds(self.model.R_bounds, 
-                                                 self.model.k_bounds, 
-                                                 self.model.NR_bounds)
+        takestep = custom_minimizer.CustomTakeStep(self.R_mc_interval, 
+                                                     self.k_mc_interval, 
+                                                     self.NR_mc_interval, 
+                                                     self.R_min_step, 
+                                                     self.k_min_step, 
+                                                     self.NR_min_step, 
+                                                     self.R_bounds, 
+                                                     self.k_bounds, 
+                                                     self.NR_bounds)
+        
+        bounds = custom_minimizer.CustomBounds(self.R_bounds, 
+                                                 self.k_bounds, 
+                                                 self.NR_bounds)
     
-        ret = basinhopping(self.func, self.model.x0, minimizer_kwargs=self.model.minimizer, 
-                           niter=self.model.mc_iter, callback=self.print_fun, 
-                           take_step=mytakestep, T=self.model.T, accept_test=mybounds)
+        ret = basinhopping(self.func, self.x0, minimizer_kwargs=self.minimizer, 
+                           niter=self.mc_iter, callback=self.print_fun, 
+                           take_step=takestep, T=self.T, accept_test=bounds)
     
         R, k, NR = ret.x
         h = ret.fun #heterogeneity
         message = "global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R, k, NR, h)    
-        I = self.model.deposition(R, k, NR, 1)
         t1 = time.time()        
-        message +='\nFull time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(self.model.time_f), mean(self.model.time_f))
-        print(message)
+        message +='\nFull time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, self.count, (t1-t0)/self.count)
         self.log += (message+'\n')
         self.upd_signal.emit(message)
-        return I    
+        return True    
     
     def func(self, x):
+        self.count += 1
         c = 0
         gate=100
-        delta=(0.1, 0.01)
-        if x[0]<self.model.R_bounds[0]+delta[0]:
-            c+=gate*(self.model.R_bounds[0]+delta[0]-x[0])
-        if x[0]>self.model.R_bounds[1]-delta[0]:  
-            c+=gate*(x[0]+delta[0]-self.model.R_bounds[0])
-        if x[1]<self.model.k_bounds[0]+delta[1]:
-            c+=gate*(self.model.k_bounds[0]+delta[1]-x[1])
-        if x[1]>self.model.k_bounds[1]-delta[1]:  
-            c+=gate*(x[1]+delta[1]-self.model.k_bounds[0])
-        h = self.model.heterogeneity(self.model.deposition(*x, 1))
-        if self.model.verbose: 
+        delta=(self.R_step*2, self.k_step*2)
+        if x[0]<self.R_bounds[0]+delta[0]:
+            c+=gate*(self.R_bounds[0]+delta[0]-x[0])
+        if x[0]>self.R_bounds[1]-delta[0]:  
+            c+=gate*(x[0]+delta[0]-self.R_bounds[0])
+        if x[1]<self.k_bounds[0]+delta[1]:
+            c+=gate*(self.k_bounds[0]+delta[1]-x[1])
+        if x[1]>self.k_bounds[1]-delta[1]:  
+            c+=gate*(x[1]+delta[1]-self.k_bounds[0])
+        args = [*x, 1, self.alpha0_sub, self.point_tolerance, 
+                self.max_angle_divisions, self.cores]
+        h = self.heterogeneity(self.deposition(*args))
+        if self.verbose: 
             message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)
-            print(message)
             self.log += (message+'\n')
             self.upd_signal.emit(message)
+            
         return c+h
     
     def print_fun(self, x, f, accepted):
-        self.model.count+=1
+        self.mc_count+=1
         if accepted == 1: s = 'accepted'
         else: s = 'rejected' 
-        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.model.count, 1+self.model.mc_iter, f, *x, s)
-        print(message)
+        message = "\n##############\n%d/%d Monte-Carlo step: minimum %.2f at R = %.3f, k = %.3f, NR = %.1f was %s\n##############\n" % (self.mc_count, 1+self.mc_iter, f, *x, s)
         self.log += (message+'\n')
         self.upd_signal.emit(message)
