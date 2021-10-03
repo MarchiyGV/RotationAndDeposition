@@ -410,9 +410,10 @@ class Model(QObject):
         return (1-I.min()/I.max())*100
     
 class Deposition(QObject):
+    
     def __init__(self, rho, alpha, F, njobs=1, parent=None):
-        
         super().__init__(parent)
+        self.time = []
         n = len(rho)
         rho_p = []
         alpha_p = []
@@ -446,7 +447,7 @@ class Deposition(QObject):
                                            point_tolerance, max_angle_divisions)
             self.hs = self.workers[0]()
             t = time.time()-t0
-            print(t)
+            self.time.append(t)
             return self.hs
             
         hs = []
@@ -463,7 +464,7 @@ class Deposition(QObject):
             hs = [result[i].get() for i in range(len(self.workers)) ]
         self.hs = np.concatenate(hs)
         t = time.time()-t0
-        print(t)
+        self.time.append(t)
         return self.hs
     
 

@@ -1,5 +1,6 @@
 omega_decimals = 2
 
+from tabulate import tabulate
 from math import ceil
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
 QThread, QItemSelectionModel, QAbstractItemModel)
@@ -15,22 +16,21 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QKeySequence
 import matplotlib
-
+import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 from numpy import (array, multiply, log10, reshape, mean, min)
 import os
 import time
-import matplotlib.pyplot as plt
 
 import exception_hooks
 import design
 import functions 
 from settings import *
-from multiprocessing import Process, freeze_support
+from multiprocessing import freeze_support
 
 
-#pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
+#pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui2.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 font = {'family' : 'normal',
         'size'   : 15}
 
@@ -449,19 +449,26 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.cancel_dep_button.setDisabled(True)
         if self.dep_flag:
             I = self.model.deposition.hs
-            
             if I is None:
                 return False
             het = self.model.heterogeneity(I)
             thickness = I.mean()
             omega = thickness/self.h
+            t = self.model.deposition.time[-1]
             self.deposition_output.setText('')
             self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
             n = int(ceil(log10(1/omega)))
+            self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
+                                                                 'k = ', self.k,
+                                                                 'NR = ', self.NR, 
+                                                                 'het = ', het, 
+                                                                 'omega = ', omega, 
+                                                                 'time = ', t))
             if n <= omega_decimals:
                 self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
             else:
                 self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
+            self.deposition_output.append(f'\nВремя расчёта: {round(t,2)}s')
             if omega>self.model.omega_s_max:
                 self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
             if omega*self.k>self.model.omega_p_max:
@@ -481,7 +488,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                       color='black', linewidth=7)
             ax1f.set_xlabel('x, mm')
             ax1f.set_ylabel('y, mm')
-            import matplotlib.ticker as ticker
+            
             @ticker.FuncFormatter
             def major_formatter(x, pos):
                 return "%d" % (x*100)
