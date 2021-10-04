@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_2.ui'
+# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_reserve.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
@@ -88,32 +88,6 @@ class Ui_MainWindow(object):
         self.widget_2.setObjectName("widget_2")
         self.horizontalLayout_6 = QtWidgets.QHBoxLayout(self.widget_2)
         self.horizontalLayout_6.setObjectName("horizontalLayout_6")
-        self.widget_13 = QtWidgets.QWidget(self.widget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
-        sizePolicy.setHorizontalStretch(10)
-        sizePolicy.setVerticalStretch(10)
-        sizePolicy.setHeightForWidth(self.widget_13.sizePolicy().hasHeightForWidth())
-        self.widget_13.setSizePolicy(sizePolicy)
-        self.widget_13.setMinimumSize(QtCore.QSize(300, 300))
-        self.widget_13.setMaximumSize(QtCore.QSize(600, 600))
-        self.widget_13.setSizeIncrement(QtCore.QSize(1, 1))
-        self.widget_13.setObjectName("widget_13")
-        self.verticalLayout_8 = QtWidgets.QVBoxLayout(self.widget_13)
-        self.verticalLayout_8.setObjectName("verticalLayout_8")
-        self.source_plot = QtWidgets.QWidget(self.widget_13)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
-        sizePolicy.setHorizontalStretch(10)
-        sizePolicy.setVerticalStretch(10)
-        sizePolicy.setHeightForWidth(self.source_plot.sizePolicy().hasHeightForWidth())
-        self.source_plot.setSizePolicy(sizePolicy)
-        self.source_plot.setMinimumSize(QtCore.QSize(300, 300))
-        self.source_plot.setMaximumSize(QtCore.QSize(600, 600))
-        self.source_plot.setSizeIncrement(QtCore.QSize(1, 1))
-        self.source_plot.setObjectName("source_plot")
-        self.source_plot_vl = QtWidgets.QVBoxLayout(self.source_plot)
-        self.source_plot_vl.setObjectName("source_plot_vl")
-        self.verticalLayout_8.addWidget(self.source_plot)
-        self.horizontalLayout_6.addWidget(self.widget_13)
         self.widget_14 = QtWidgets.QWidget(self.widget_2)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(8)
@@ -121,7 +95,7 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.widget_14.sizePolicy().hasHeightForWidth())
         self.widget_14.setSizePolicy(sizePolicy)
         self.widget_14.setMinimumSize(QtCore.QSize(300, 300))
-        self.widget_14.setMaximumSize(QtCore.QSize(600, 600))
+        self.widget_14.setMaximumSize(QtCore.QSize(16777215, 3123123))
         self.widget_14.setSizeIncrement(QtCore.QSize(1, 1))
         self.widget_14.setObjectName("widget_14")
         self.verticalLayout_9 = QtWidgets.QVBoxLayout(self.widget_14)
@@ -134,7 +108,7 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.mesh_plot.sizePolicy().hasHeightForWidth())
         self.mesh_plot.setSizePolicy(sizePolicy)
         self.mesh_plot.setMinimumSize(QtCore.QSize(300, 300))
-        self.mesh_plot.setMaximumSize(QtCore.QSize(600, 600))
+        self.mesh_plot.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.mesh_plot.setSizeIncrement(QtCore.QSize(1, 1))
         self.mesh_plot.setObjectName("mesh_plot")
         self.mesh_plot_vl = QtWidgets.QVBoxLayout(self.mesh_plot)

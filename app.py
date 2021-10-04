@@ -106,6 +106,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.settings.upd_signal.connect(self.select) #fix one strange problem
         self.p_dep_bar.setValue(0)
         
+    def resizeEvent(self, event):
+        self.mesh_plot_vl.canvas.figure.tight_layout()
+        QMainWindow.resizeEvent(self, event)
+        
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
         selection = self.table_settings.model().index(row, 0)
@@ -316,20 +320,16 @@ class App(QMainWindow, design.Ui_MainWindow):
     def plot_model(self):
         try: 
             self.mesh_plot_vl.canvas.figure.axes[0].cla()
-            self.source_plot_vl.canvas.figure.clf()
+            self.mesh_plot_vl.canvas.figure.axes[1].cla()
         except:
-            fig1 = Figure()
-            self.mesh_plot_vl.canvas = FigureCanvas(fig1)
+            chosen_value = 10
+            fig = Figure()
+            self.mesh_plot_vl.canvas = FigureCanvas(fig)
             self.mesh_plot_vl.addWidget(self.mesh_plot_vl.canvas)
-            toolbar1 = NavigationToolbar(self.mesh_plot_vl.canvas, self.mesh_plot)
-            #self.mesh_plot_vl.addWidget(toolbar1)
-            self.mesh_plot_vl.canvas.figure.add_subplot(111)
-            fig2 = Figure()
-            self.source_plot_vl.canvas = FigureCanvas(fig2)
-            self.source_plot_vl.addWidget(self.source_plot_vl.canvas)
-            toolbar2 = NavigationToolbar(self.source_plot_vl.canvas, self.source_plot)
-            #self.source_plot_vl.addWidget(toolbar2)
-        self.source_plot_vl.canvas.figure.add_subplot(111)
+            toolbar = NavigationToolbar(self.mesh_plot_vl.canvas, self.mesh_plot)
+            self.mesh_plot_vl.addWidget(toolbar)
+            self.mesh_plot_vl.canvas.figure.add_subplot(121)
+            self.mesh_plot_vl.canvas.figure.add_subplot(122)
         ax1 = self.mesh_plot_vl.canvas.figure.axes[0]
         ax1.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, color='black')
         ax1.plot(self.model.xs, self.model.ys, 'x', label='mesh point')
@@ -337,9 +337,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1.set_ylabel('y, mm')  
         ax1.set_aspect('equal')
         ax1.set_title('Сетка подложки\n')
-        self.mesh_plot_vl.canvas.draw()
-        
-        ax2 = self.source_plot_vl.canvas.figure.axes[0]
+        ax2 = self.mesh_plot_vl.canvas.figure.axes[1]
         im = ax2.contourf(self.model.deposition_coords_map_x, 
                      self.model.deposition_coords_map_y, 
                      self.model.deposition_coords_map_z, 100)
@@ -364,23 +362,26 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.arrow(0, 0, mean(self.model.R_bounds), 0, 
                   width=0.5, head_length = 4, head_width=4, color='black')
         ax2.text(mean(self.model.R_bounds)-5, 5, 'R', size=12, ha='right')
+        try:
+            self.model_cbar.remove()
+        except AttributeError:
+            pass
         
-        
-        cbar = self.source_plot_vl.canvas.figure.colorbar(im,
-                                                          fraction=0.046, 
-                                                          pad=0.04)
-        cbar.set_label('nm/min')
+        self.model_cbar = self.mesh_plot_vl.canvas.figure.colorbar(im, fraction=0.046, 
+                                                                   pad=0.04)
+        self.model_cbar.set_label('nm/min')
         ax2.set_xlabel('x, mm')
         ax2.set_ylabel('y, mm')
         ax2.set_aspect('equal')
         ax2.set_title('Профиль источника\n')
-        self.source_plot_vl.canvas.draw()
+        self.mesh_plot_vl.canvas.figure.tight_layout()
+        self.mesh_plot_vl.canvas.draw()
         
     @pyqtSlot() 
     def plot_geometry_upd(self):
         ax = self.geometry_vl.canvas.figure.axes[0]
         substrate_rect_x = array(self.model.substrate_rect_x)+self.R
-        substrate_rect_y = array(self.model.substrate_rect_y)
+        #substrate_rect_y = array(self.model.substrate_rect_y)
         self.geometry_rect_ref.set_xdata(substrate_rect_x)
         #self.geometry_plot_ref.set_ydata(substrate_rect_y)
         self.geometry_text_ref.set_x(substrate_rect_x.mean())
