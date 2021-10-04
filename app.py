@@ -491,7 +491,14 @@ class App(QMainWindow, design.Ui_MainWindow):
             
             @ticker.FuncFormatter
             def major_formatter(x, pos):
-                return "%d" % (x*100)
+                z = (1-x)*100
+                if het > 5:
+                	return "%d" % z
+                elif het > 1:
+                	return "%.1f" % z
+                else:
+                	return "%.2f" % z
+
             cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
                                                        format=major_formatter)
             cbar.set_label('% $h_{max}$')
