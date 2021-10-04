@@ -67,7 +67,7 @@ class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
     
-    def __init__(self,
+    def update(self,
                  fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
                  magnetron_y, substrate_shape, substrate_radius, 
                  substrate_x_len, substrate_y_len, substrate_res, cores, 
