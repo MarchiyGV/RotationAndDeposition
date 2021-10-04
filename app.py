@@ -430,6 +430,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2f.set_xlabel('x, mm')
         ax2f.set_ylabel('y, mm')
         ax2f.set_aspect('equal')
+        ax2f.set_title('Геометрия источника\n')
         cbar = self.geometry_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04)
         cbar.set_label('nm/min')
         self.geometry_vl.canvas.draw()
@@ -508,6 +509,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                   color='black', linewidth=7)
         ax1f.set_xlabel('x, mm')
         ax1f.set_ylabel('y, mm')
+        ax1f.set_title('Толщина плёнки\n')
         @ticker.FuncFormatter
         def major_formatter(x, pos):
             z = x*100
