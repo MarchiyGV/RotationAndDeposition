@@ -336,6 +336,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1.set_xlabel('x, mm')
         ax1.set_ylabel('y, mm')  
         ax1.set_aspect('equal')
+        ax1.set_title('Сетка подложки\n')
         self.mesh_plot_vl.canvas.draw()
         
         ax2 = self.source_plot_vl.canvas.figure.axes[0]
@@ -364,6 +365,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                   width=0.5, head_length = 4, head_width=4, color='black')
         ax2.text(mean(self.model.R_bounds)-5, 5, 'R', size=12, ha='right')
         
+        
         cbar = self.source_plot_vl.canvas.figure.colorbar(im,
                                                           fraction=0.046, 
                                                           pad=0.04)
@@ -371,6 +373,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2.set_xlabel('x, mm')
         ax2.set_ylabel('y, mm')
         ax2.set_aspect('equal')
+        ax2.set_title('Профиль источника\n')
         self.source_plot_vl.canvas.draw()
         
     @pyqtSlot() 
