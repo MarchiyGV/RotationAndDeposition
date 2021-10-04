@@ -277,6 +277,11 @@ class App(QMainWindow, design.Ui_MainWindow):
     def model_log(self, msg, type):
         self.model_info.append(msg)
         
+    @pyqtSlot(str, str) 
+    def warn(self, msg, type=None):
+        self.warnbox.showMessage(msg, type)
+        self.warnbox.exec_()
+        
     def error(self, msg):
         self.errorbox.setText(msg)
         self.errorbox.exec_()
@@ -461,9 +466,16 @@ class App(QMainWindow, design.Ui_MainWindow):
         het = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
+        proc_time = self.NR/omega
         t = self.model.deposition.time[-1]
         self.deposition_output.setText('')
-        self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
+        self.deposition_output.append(f'Неоднородность: ({round(het,2)} +- {4*self.model.point_tolerance*100})%\n')
+        if het < self.model.point_tolerance*100:
+            msg = f'Резултат расчёта неоднородности может быть неверным, так как полученная неоднородность {round(het,2)}% меньше заданной точности расчёта толщины в точке {self.model.point_tolerance*100}\nНеобходимо уменьшить параметр "Точность в точке"' 
+            self.warn(msg)
+            self.deposition_output.append(msg)
+        elif het < self.model.point_tolerance*4*100:
+            self.deposition_output.append(f'Достоверность расчёта неоднородности не может быть гарантированна, так как полученная неоднородность {round(het,2)}% меньше максимально возможной погрешности {4*self.model.point_tolerance*100}\nРекомендуется уменьшить параметр "Точность в точке"')
         n = int(ceil(log10(1/omega)))
         self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
                                                              'k = ', self.k,
@@ -472,9 +484,10 @@ class App(QMainWindow, design.Ui_MainWindow):
                                                              'omega = ', omega, 
                                                              'time = ', t))
         if n <= omega_decimals:
-            self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
+            self.deposition_output.append(f'\nУгловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
         else:
-            self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
+            self.deposition_output.append('Угловая скорость: %.2fe-%d оборотов/мин.' % (omega*(10**n), n))
+        self.deposition_output.append('\nВремя процесса: %d мин.' % (proc_time))
         self.deposition_output.append(f'\nВремя расчёта: {round(t,2)}s')
         if omega>self.model.omega_s_max:
             self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
