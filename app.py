@@ -491,7 +491,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             
             @ticker.FuncFormatter
             def major_formatter(x, pos):
-                z = (1-x)*100
+                z = x*100
                 if het > 5:
                 	return "%d" % z
                 elif het > 1:
