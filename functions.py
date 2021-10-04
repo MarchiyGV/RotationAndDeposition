@@ -11,7 +11,7 @@ from joblib import Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
-from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot, QThread
 from PyQt5 import QtWidgets
 #from ray.util.multiprocessing import Pool as Pool_ray
 #import ray
@@ -409,63 +409,94 @@ class Model(QObject):
     def heterogeneity(self, I):
         return (1-I.min()/I.max())*100
     
-class Deposition(QObject):
+class Deposition(QThread):
+    progress_signal = pyqtSignal(float)
     
     def __init__(self, rho, alpha, F, njobs=1, parent=None):
         super().__init__(parent)
         self.time = []
         n = len(rho)
-        rho_p = []
-        alpha_p = []
-        if njobs>n:
-            njobs = n
-        m = n//njobs
-        if n%njobs == 0:
-            for i in range(njobs):
-                rho_p.append(rho[i*m:(i+1)*m])
-                alpha_p.append(alpha[i*m:(i+1)*m])
+        self.n = n
+        self.count = 0
+        self.njobs = njobs
+        if njobs == 1:
+            self.workers = [Worker_single(F, rho, alpha)]
         else:
-            k = njobs-n%njobs
-            m+=1
-            for i in range(njobs-k):
-                rho_p.append(rho[i*m:(i+1)*m])
-                alpha_p.append(alpha[i*m:(i+1)*m])
-            i0 = m*(njobs-k)
-            m-=1
-            for i in range(k):
-                rho_p.append(rho[i0+i*m:i0+(i+1)*m])
-                alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
-            
-        self.workers = [Worker(F, rho_p[i], alpha_p[i]) for i in range(njobs)]
-            
+            rho_p = []
+            alpha_p = []
+            if njobs>n:
+                njobs = n
+            m = n//njobs
+            if n%njobs == 0:
+                for i in range(njobs):
+                    rho_p.append(rho[i*m:(i+1)*m])
+                    alpha_p.append(alpha[i*m:(i+1)*m])
+            else:
+                k = njobs-n%njobs
+                m+=1
+                for i in range(njobs-k):
+                    rho_p.append(rho[i*m:(i+1)*m])
+                    alpha_p.append(alpha[i*m:(i+1)*m])
+                i0 = m*(njobs-k)
+                m-=1
+                for i in range(k):
+                    rho_p.append(rho[i0+i*m:i0+(i+1)*m])
+                    alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
+                
+            self.workers = [Worker(F, rho_p[i], alpha_p[i]) for i in range(njobs)]
         
-    def __call__(self, R, k, NR, omega, alpha0_sub, point_tolerance, 
+    @pyqtSlot()
+    def progress(self):
+        self.count += 1
+        self.progress_signal.emit(self.count/self.n)    
+            
+    def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, 
                  max_angle_divisions, cores):
+         self.R = R
+         self.k = k
+         self.NR = NR
+         self.omega = omega
+         self.alpha0_sub = alpha0_sub
+         self.point_tolerance = point_tolerance
+         self.max_angle_divisions = max_angle_divisions 
+         self.cores = cores
+         self.count = 0
+         
+    def run(self):
+        R = self.R
+        k = self.k
+        NR = self.NR
+        omega = self.omega
+        alpha0_sub = self.alpha0_sub
+        point_tolerance = self.point_tolerance
+        max_angle_divisions = self.max_angle_divisions 
+        cores = self.cores
         t0 = time.time()
-        if len(self.workers) == 1:
+        
+        if self.njobs == 1:
             self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
                                            point_tolerance, max_angle_divisions)
+            try:
+                self.workers[0].progress_signal.disconnect()
+            except:
+                pass
+            self.workers[0].progress_signal.connect(self.progress)
             self.hs = self.workers[0]()
-            t = time.time()-t0
-            self.time.append(t)
-            return self.hs
-            
-        hs = []
-        self.procs = []
-        for worker in self.workers:
-            worker.set_properties(R, k, NR, omega, alpha0_sub,
-                                  point_tolerance, max_angle_divisions)
-
-        result = []
-        with Pool(processes=len(self.workers)) as pool:      
+        else:
+            hs = []
+            result = []
             for worker in self.workers:
-                a = pool.apply_async(worker)
-                result.append(a)
-            hs = [result[i].get() for i in range(len(self.workers)) ]
-        self.hs = np.concatenate(hs)
+                worker.set_properties(R, k, NR, omega, alpha0_sub,
+                                      point_tolerance, max_angle_divisions)
+    
+            with Pool(processes=len(self.workers)) as pool:      
+                for worker in self.workers:
+                    a = pool.apply_async(worker)
+                    result.append(a)
+                hs = [result[i].get() for i in range(len(self.workers)) ]
+            self.hs = np.concatenate(hs)
         t = time.time()-t0
         self.time.append(t)
-        return self.hs
     
 
 class Worker:
@@ -497,6 +528,43 @@ class Worker:
                    limit=int(round(self.max_angle_divisions*360*self.NR)), 
                    epsrel=self.point_tolerance)[0] for i in self.ind]
         hs = np.array(hs)/(2*pi*self.omega)
+        return hs
+    
+class Worker_single(QObject):
+    progress_signal = pyqtSignal()
+    def __init__(self, F, rho, alpha, parent=None):
+        super().__init__(parent)
+        self.F = F
+        self.rho = rho
+        self.alpha = alpha
+        self.ind = range(len(rho))
+        self.hs = None
+        
+    def set_properties(self, R, k, NR, omega, alpha0_sub,
+                       point_tolerance, max_angle_divisions):
+        self.R = R
+        self.k = k
+        self.NR = NR
+        self.omega = omega
+        self.alpha0_sub = alpha0_sub
+        self.max_angle_divisions = max_angle_divisions
+        self.point_tolerance = point_tolerance
+        
+    def xyp(self, a, i):
+        x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
+        y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
+        
+        return x, y
+        
+    def __call__(self):
+        hs = np.empty_like(self.ind)
+        for i in self.ind:
+            hs[i] = (quad(lambda a: self.F(self.xyp(a, i)), 
+                       self.alpha0_sub, self.NR*2*pi,
+                       limit=int(round(self.max_angle_divisions*360*self.NR)), 
+                       epsrel=self.point_tolerance)[0])
+            self.progress_signal.emit()
+        hs = hs/(2*pi*self.omega)
         return hs
     
 

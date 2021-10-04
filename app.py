@@ -102,6 +102,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.optimisationLog.setText('Log: \n')
         self.settings.upd_signal.connect(self.update_settings_dependansies)
         self.settings.upd_signal.connect(self.select) #fix one strange problem
+        self.p_dep_bar.setValue(0)
         
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
@@ -433,15 +434,25 @@ class App(QMainWindow, design.Ui_MainWindow):
         args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
                 self.model.point_tolerance, self.model.max_angle_divisions,
                 self.model.cores]
-        self.deposition_thread = Thread(self.model.deposition, args)
-        self.deposition_thread.finished.connect(self.deposition_plot)
+        self.model.deposition.task(*args)
+        self.model.deposition.finished.connect(self.deposition_plot)
+        self.p_dep_bar.setValue(0)
+        try:
+            self.model.deposition.progress_signal.disconnect()
+        except:
+            pass
+        self.model.deposition.progress_signal.connect(self.deposition_progress)
         self.dep_flag = True
-        self.deposition_thread.start()
+        self.model.deposition.start()
     
     @pyqtSlot()
     def deposition_stop(self):
         self.dep_flag = False
-        self.deposition_thread.terminate()        
+        self.model.deposition.terminate()  
+        
+    @pyqtSlot(float)
+    def deposition_progress(self, progress):
+        self.p_dep_bar.setValue(int(round(progress*100)))
         
     @pyqtSlot()    
     def deposition_plot(self):
@@ -497,6 +508,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             cbar.set_label('% $h_{max}$')
             ax1f.set_aspect('equal')
             self.film_vl.canvas.draw()
+            self.dep_flag = False
         
         
     @pyqtSlot()    
