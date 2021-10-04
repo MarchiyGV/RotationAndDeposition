@@ -76,7 +76,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.shortcut_deposite.activated.connect(self.DepositionButton.clicked.emit)
         self.shortcut_update.activated.connect(self.update_model_Button.clicked.emit)
         self.model = functions.Model()
-        self.model.warn_signal.connect(self.warn)
+        self.model.log_signal.connect(self.model_log)
         self.save_path = 'saves/'   
         success = self.update_settings(self.save_path+'settings.xlsx')
         if success:
@@ -274,9 +274,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.thick_edit.setText(str(self.h))
         
     @pyqtSlot(str, str) 
-    def warn(self, msg, type):
-        self.warnbox.showMessage(msg+" warn by appapp", type)
-        self.warnbox.exec_()
+    def model_log(self, msg, type):
+        self.model_info.append(msg)
         
     def error(self, msg):
         self.errorbox.setText(msg)
@@ -284,6 +283,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     
     @pyqtSlot()    
     def update_model(self):
+        self.model_info.setText('')
         settings = self.settings.wrap()
         self.model.update(**settings)
         if self.model.success:

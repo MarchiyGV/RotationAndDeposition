@@ -65,7 +65,7 @@ class interp_axial:
 
 class Model(QObject):
     
-    warn_signal = pyqtSignal(str,str)
+    log_signal = pyqtSignal(str,str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -86,14 +86,12 @@ class Model(QObject):
         self.memory = Memory('cache', verbose=0)
         self.count = 0
         self.rotation_type = rotation_type
-        #sputter_profile = 'depline_Kaufman.mat'
-        #sputter_profile = 'ExpData/depline_exp_130mm.mat'
         self.fname_sim = fname_sim
         self.fname_exp = fname_exp
-        self.C = C #thickness [nm] per minute
+        self.C = C
         self.magnetron_x = magnetron_x
         self.magnetron_y = magnetron_y
-        self.source = source #Choose source of get thickness data 1 - seimtra, 0 - experiment
+        self.source = source
         self.alpha0_sub = 0*pi
         self.substrate_shape = substrate_shape
         if substrate_shape == 'Circle':
@@ -109,14 +107,13 @@ class Model(QObject):
         self.substrate_columns = ceil(substrate_x_len*substrate_res)
         self.cores = cores # number of jobs for paralleling
         self.verbose = verbose # True: print message each time when function of deposition called
-        self.delete_cache = delete_cache # True: delete history of function evaluations in the beggining 
-                            #of work. Warning: if = False, some changes in the code may be ignored
-        self.point_tolerance = point_tolerance/100 # needed relative tolerance for thickness in each point
-        self.max_angle_divisions = max_angle_divisions # limit of da while integration = 1 degree / max_angle_divisions
-        self.holder_inner_radius = holder_inner_radius  # mm
-        self.holder_outer_radius = holder_outer_radius  # radius sampleholder, mm
-        self.deposition_len_x = deposition_len_x # mm
-        self.deposition_len_y = deposition_len_y # mm
+        self.delete_cache = delete_cache
+        self.point_tolerance = point_tolerance/100 
+        self.max_angle_divisions = max_angle_divisions 
+        self.holder_inner_radius = holder_inner_radius  
+        self.holder_outer_radius = holder_outer_radius
+        self.deposition_len_x = deposition_len_x 
+        self.deposition_len_y = deposition_len_y 
         self.R_step = R_step
         R_decimals = int(log10(1/self.R_step))
         self.k_step = k_step
@@ -281,15 +278,7 @@ class Model(QObject):
             self.xs, self.ys = pol2cart(self.rho, self.alpha0) 
 
         self.ind = list(range(len(self.xs)))
-        '''
-        import matplotlib.pyplot as plt
-        plt.plot(self.xs, self.ys, 'x')
-        for i in self.ind:
-            plt.text(self.xs[i], self.ys[i], str(i))
-        '''
-        #self.ind = [(i, len(self.substrate_coords_map_x[0])//2) for i in range(len(self.substrate_coords_map_x))]
-        #self.ind = self.ind + [(len(self.substrate_coords_map_x)//2, i) for i in range(len(self.substrate_coords_map_x[0]))]
-        
+
         if source == 'SIMTRA':
             self.success = self.open_simtra_file(fname_sim)
             
@@ -371,9 +360,9 @@ class Model(QObject):
                 m, n = RELdeposition_coords_map_z.shape
                 error(f"Неверно указана размерность сетки: {M}x{N} вместо {m}x{n}")
             
-            msg = 'Согласно резудьтатам расчёта SIMTRA:\n {} % потока осаждено на заданную поверхность'.format(round(100*RELdeposition_coords_map_z.sum()/I_tot))
-            type = 'simtra'
-            self.warn_signal.emit(msg, type)
+            msg = 'Согласно резудьтатам расчёта SIMTRA: {} % потока осаждено на заданную поверхность'.format(round(100*RELdeposition_coords_map_z.sum()/I_tot))
+            type = 'Чтение файла с результатами расчёта SIMTRA'
+            self.log_signal.emit(msg, type)
             #message(msg)
             row_dep = RELdeposition_coords_map_z.max()
             self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
