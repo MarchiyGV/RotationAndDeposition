@@ -303,7 +303,7 @@ class Model(QObject):
             joblib_ignore.append('k')
         '''    
         self.time_f = []
-        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.cores)
+        self.deposition = Deposition(self.rho, self.alpha0, self.F, njobs=self.cores)
         self.success = True
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
@@ -461,7 +461,6 @@ class Deposition(QThread):
         alpha0_sub = self.alpha0_sub
         point_tolerance = self.point_tolerance
         max_angle_divisions = self.max_angle_divisions 
-        cores = self.cores
         t0 = time.time()
         
         if self.njobs == 1:

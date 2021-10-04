@@ -286,6 +286,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model_info.setText('')
         settings = self.settings.wrap()
         self.model.update(**settings)
+        self.model.deposition.finished.connect(self.deposition_plot)
+        self.model.deposition.progress_signal.connect(self.deposition_progress)
         if self.model.success:
             self.disable_model(False)
         else:
@@ -435,19 +437,14 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.model.point_tolerance, self.model.max_angle_divisions,
                 self.model.cores]
         self.model.deposition.task(*args)
-        self.model.deposition.finished.connect(self.deposition_plot)
         self.p_dep_bar.setValue(0)
-        try:
-            self.model.deposition.progress_signal.disconnect()
-        except:
-            pass
-        self.model.deposition.progress_signal.connect(self.deposition_progress)
-        self.dep_flag = True
         self.model.deposition.start()
+        
+    #def _deposition(self, args):
+        
     
     @pyqtSlot()
     def deposition_stop(self):
-        self.dep_flag = False
         self.model.deposition.terminate()  
         
     @pyqtSlot(float)
@@ -458,64 +455,60 @@ class App(QMainWindow, design.Ui_MainWindow):
     def deposition_plot(self):
         self.DepositionButton.setDisabled(False)
         self.cancel_dep_button.setDisabled(True)
-        if self.dep_flag:
-            I = self.model.deposition.hs
-            if I is None:
-                return False
-            het = self.model.heterogeneity(I)
-            thickness = I.mean()
-            omega = thickness/self.h
-            t = self.model.deposition.time[-1]
-            self.deposition_output.setText('')
-            self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
-            n = int(ceil(log10(1/omega)))
-            self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
-                                                                 'k = ', self.k,
-                                                                 'NR = ', self.NR, 
-                                                                 'het = ', het, 
-                                                                 'omega = ', omega, 
-                                                                 'time = ', t))
-            if n <= omega_decimals:
-                self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
+        I = self.model.deposition.hs
+        if I is None:
+            return False
+        het = self.model.heterogeneity(I)
+        thickness = I.mean()
+        omega = thickness/self.h
+        t = self.model.deposition.time[-1]
+        self.deposition_output.setText('')
+        self.deposition_output.append(f'Неоднородность: {round(het,2)}%\n')
+        n = int(ceil(log10(1/omega)))
+        self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
+                                                             'k = ', self.k,
+                                                             'NR = ', self.NR, 
+                                                             'het = ', het, 
+                                                             'omega = ', omega, 
+                                                             'time = ', t))
+        if n <= omega_decimals:
+            self.deposition_output.append(f'Угловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
+        else:
+            self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
+        self.deposition_output.append(f'\nВремя расчёта: {round(t,2)}s')
+        if omega>self.model.omega_s_max:
+            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
+        if omega*self.k>self.model.omega_p_max:
+            self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
+        try: 
+            self.film_vl.canvas.figure.clf()
+        except:
+            fig = Figure()
+            self.film_vl.canvas = FigureCanvas(fig)
+            self.film_vl.addWidget(self.film_vl.canvas)
+            self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
+            self.film_vl.addWidget(self.toolbar1)
+        self.film_vl.canvas.figure.add_subplot(111)
+        ax1f = self.film_vl.canvas.figure.axes[0]
+        im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
+        ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
+                  color='black', linewidth=7)
+        ax1f.set_xlabel('x, mm')
+        ax1f.set_ylabel('y, mm')
+        @ticker.FuncFormatter
+        def major_formatter(x, pos):
+            z = x*100
+            if het > 5:
+                return "%d" % z
+            elif het > 1:
+                return "%.1f" % z
             else:
-                self.deposition_output.append(f'Угловая скорость: %.{2}fe-%d оборотов/мин.' % (omega*(10**n), n))
-            self.deposition_output.append(f'\nВремя расчёта: {round(t,2)}s')
-            if omega>self.model.omega_s_max:
-                self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
-            if omega*self.k>self.model.omega_p_max:
-                self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
-            try: 
-                self.film_vl.canvas.figure.clf()
-            except:
-                fig = Figure()
-                self.film_vl.canvas = FigureCanvas(fig)
-                self.film_vl.addWidget(self.film_vl.canvas)
-                self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
-                self.film_vl.addWidget(self.toolbar1)
-            self.film_vl.canvas.figure.add_subplot(111)
-            ax1f = self.film_vl.canvas.figure.axes[0]
-            im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
-            ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
-                      color='black', linewidth=7)
-            ax1f.set_xlabel('x, mm')
-            ax1f.set_ylabel('y, mm')
-            
-            @ticker.FuncFormatter
-            def major_formatter(x, pos):
-                z = x*100
-                if het > 5:
-                	return "%d" % z
-                elif het > 1:
-                	return "%.1f" % z
-                else:
-                	return "%.2f" % z
-
-            cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
+                return "%.2f" % z
+        cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
                                                        format=major_formatter)
-            cbar.set_label('% $h_{max}$')
-            ax1f.set_aspect('equal')
-            self.film_vl.canvas.draw()
-            self.dep_flag = False
+        cbar.set_label('% $h_{max}$')
+        ax1f.set_aspect('equal')
+        self.film_vl.canvas.draw()
         
         
     @pyqtSlot()    
