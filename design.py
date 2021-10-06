@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_reserve.ui'
+# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_test.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
@@ -272,30 +272,6 @@ class Ui_MainWindow(object):
         self.geometry_vl.setObjectName("geometry_vl")
         self.verticalLayout.addWidget(self.geometry_plot)
         self.horizontalLayout_7.addWidget(self.widget_11)
-        self.widget_12 = QtWidgets.QWidget(self.widget_10)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.widget_12.sizePolicy().hasHeightForWidth())
-        self.widget_12.setSizePolicy(sizePolicy)
-        self.widget_12.setMinimumSize(QtCore.QSize(300, 300))
-        self.widget_12.setSizeIncrement(QtCore.QSize(1, 1))
-        self.widget_12.setObjectName("widget_12")
-        self.verticalLayout_7 = QtWidgets.QVBoxLayout(self.widget_12)
-        self.verticalLayout_7.setObjectName("verticalLayout_7")
-        self.film_plot = QtWidgets.QWidget(self.widget_12)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.film_plot.sizePolicy().hasHeightForWidth())
-        self.film_plot.setSizePolicy(sizePolicy)
-        self.film_plot.setMinimumSize(QtCore.QSize(300, 300))
-        self.film_plot.setSizeIncrement(QtCore.QSize(1, 1))
-        self.film_plot.setObjectName("film_plot")
-        self.film_vl = QtWidgets.QVBoxLayout(self.film_plot)
-        self.film_vl.setObjectName("film_vl")
-        self.verticalLayout_7.addWidget(self.film_plot)
-        self.horizontalLayout_7.addWidget(self.widget_12)
         self.verticalLayout_6.addWidget(self.widget_10)
         self.deposition_output = QtWidgets.QTextBrowser(self.widget_8)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.MinimumExpanding)
@@ -362,7 +338,7 @@ class Ui_MainWindow(object):
         self.actionenter.setObjectName("actionenter")
 
         self.retranslateUi(MainWindow)
-        self.InputWidget.setCurrentIndex(0)
+        self.InputWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):

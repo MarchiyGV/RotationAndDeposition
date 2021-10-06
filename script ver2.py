@@ -26,8 +26,8 @@ source = 0 #Choose source of get thickness data 1 - seimtra, 0 - experiment
 val = 3 #1, 2, 3 - magnetron position
 
 alpha0_sub = 0*pi
-substrate_x_len = 100 # Substrate width, mm
-substrate_y_len = 100 # Substrate length, mm
+substrate_x_len = 70 # Substrate width, mm
+substrate_y_len = 70 # Substrate length, mm
 substrate_x_res = 0.05 # Substrate x resolution, 1/mm
 substrate_y_res = 0.05 # Substrate y resolution, 1/mm
 
@@ -91,9 +91,7 @@ sqr = lambda x: np.power(x, 2)
 def dep_profile(X, Y, center_x, center_y, C):
     #load('depline_Kaufman.mat')
     #load('ExpData/depline_exp_130mm.mat')
-    depliney = np.genfromtxt('depliney.csv',delimiter=',')
-    profile_x_len = 300
-    r = np.arange(0, profile_x_len, profile_x_len/len(depliney))
+    r, depliney = np.genfromtxt('depliney.txt', delimiter=',', unpack=True)
     f = interpolate.interp1d(r, depliney, fill_value=depliney.min(), 
                              bounds_error=False)
     
@@ -166,9 +164,9 @@ substrate_rect_y = [substrate_coords_y.max(), substrate_coords_y.max(),
 
 rho = np.sqrt(sqr(substrate_coords_map_x) + sqr(substrate_coords_map_y))
 alpha0 = np.arctan2(substrate_coords_map_y, substrate_coords_map_x)
-#ind = [(i, j) for i in range(len(substrate_coords_map_x)) for j in range(len(substrate_coords_map_x[i]))]
-ind = [(i, len(substrate_coords_map_x[0])//2) for i in range(len(substrate_coords_map_x))]
-ind = ind + [(len(substrate_coords_map_x)//2, i) for i in range(len(substrate_coords_map_x[0]))]
+ind = [(i, j) for i in range(len(substrate_coords_map_x)) for j in range(len(substrate_coords_map_x[i]))]
+#ind = [(i, len(substrate_coords_map_x[0])//2) for i in range(len(substrate_coords_map_x))]
+#ind = ind + [(len(substrate_coords_map_x)//2, i) for i in range(len(substrate_coords_map_x[0]))]
 
 plt.plot(substrate_rect_x, substrate_rect_y, color='black')
 
@@ -218,9 +216,6 @@ if not F_axial:
     F = interpolate.RegularGridInterpolator((deposition_coords_x, deposition_coords_y), 
                                             np.transpose(deposition_coords_map_z), 
                                             bounds_error=False)
-'''
-########### OPTIMIZATION #################
-'''
 
 time_f = []
 if cores>1:
@@ -247,12 +242,9 @@ elif cores==1:
     @memory.cache
     def deposition(R, k, NR, omega): #serial
         t0 = time.time()
-        if R+np.sqrt(substrate_x_len**2+substrate_y_len**2)/2>holder_outer_radius:
-                raise ValueError('Incorrect substate out of holder border.')
         ########### INTEGRATION #################
         I, I_err = zip(*[calc(ij, R, k, NR, omega) for ij in ind]) #serial
-        I = np.array(I)
-        #I = np.reshape(I, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
+        I = np.reshape(I, (len(substrate_coords_map_x),len(substrate_coords_map_x[0])))
         #I_err = np.reshape(I_err, (len(substrate_coords_map_x), len(substrate_coords_map_x[0])))
         #h_1 = (1-I[len(I)//2,:].min()/I[len(I)//2,:].max())
         #h_2 = (1-I[:,len(I[0])//2].min()/I[:,len(I[0])//2].max())
@@ -264,6 +256,10 @@ elif cores==1:
      
 else: raise ValueError('incorrect parameter "cores"')
 
+'''
+########### OPTIMIZATION #################
+'''
+'''
 omega = 3 #speed rev/min
 NR = 65
 process_time = NR/omega
@@ -304,7 +300,7 @@ print("global minimum: R = %.1f, k = %.3f, NR = %.2f, heterogeneity = %.2f" % (R
 I = deposition(R, k, NR, omega)[0]
 t1 = time.time()
 print('Full time: %d s\nfunc calls: %d\navg func computation time: %.2f s' % (t1-t0, len(time_f), np.mean(time_f)))
-
+'''
 '''
 plt.contourf(Rs, ks, heterogeneity)
 #plt.clim(9,11)
@@ -327,6 +323,11 @@ for i in range(len(substrate_coords_map_x)):
 '''
 PLOTTING
 '''
+R = 83
+k = 2.65
+NR = 1
+omega = 1
+I, h, I_err = deposition(R, k, NR, omega)
 
 substrate_rect_x = [R+substrate_coords_x.min(), R+substrate_coords_x.max(), 
                     R+substrate_coords_x.max(), R+substrate_coords_x.min(), 

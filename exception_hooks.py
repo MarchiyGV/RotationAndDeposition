@@ -7,7 +7,7 @@ from PyQt5 import QtCore, QtWidgets
 log = logging.getLogger(__name__)
 handler = logging.StreamHandler(stream=sys.stdout)
 log.addHandler(handler)
-logging.basicConfig(filename='app.log', level=logging.DEBUG)
+logging.basicConfig(filename='app.log', level=logging.INFO)
 logging.captureWarnings(True)
 
 def show_exception_box(log_msg):

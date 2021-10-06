@@ -19,15 +19,15 @@ import matplotlib
 import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
-from numpy import (array, multiply, log10, reshape, mean, min)
+from numpy import (array, multiply, log10, mean, min)
 import os
-import time
+from multiprocessing import freeze_support
 
 import exception_hooks
 import design
 import functions 
 from settings import *
-from multiprocessing import freeze_support
+
 
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui2.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
@@ -108,6 +108,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     def resizeEvent(self, event):
         self.mesh_plot_vl.canvas.figure.tight_layout()
+        self.geometry_vl.canvas.figure.tight_layout()
         QMainWindow.resizeEvent(self, event)
         
     @pyqtSlot(int)
@@ -183,6 +184,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.table_settings_opt.resizeColumnsToContents()
         ### 
         self.update_settings_dependansies()
+        self.settings.upd_signal.connect(self.update_settings_dependansies)
+        self.settings.upd_signal.connect(self.select) #fix one strange problem
         return True
         
     @pyqtSlot()
@@ -402,7 +405,8 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.geometry_vl.addWidget(self.geometry_vl.canvas)
             self.toolbar2 = NavigationToolbar(self.geometry_vl.canvas, self.geometry_plot)
             self.geometry_vl.addWidget(self.toolbar2)
-        self.geometry_vl.canvas.figure.add_subplot(111)
+        self.geometry_vl.canvas.figure.add_subplot(121)
+        self.geometry_vl.canvas.figure.add_subplot(122)
         ax2f = self.geometry_vl.canvas.figure.axes[0]
         im = ax2f.contourf(self.model.deposition_coords_map_x, self.model.deposition_coords_map_y, 
                          self.model.deposition_coords_map_z, 100)
@@ -435,8 +439,18 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2f.set_ylabel('y, mm')
         ax2f.set_aspect('equal')
         ax2f.set_title('Геометрия источника\n')
-        cbar = self.geometry_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04)
-        cbar.set_label('nm/min')
+        try:
+            self.geometry_cbar.remove()
+        except AttributeError:
+            pass
+        except ValueError:
+            pass
+        self.geometry_cbar = self.geometry_vl.canvas.figure.colorbar(im,
+                                                                     fraction=0.046, 
+                                                                     pad=0.04,
+                                                                     ax=ax2f)
+        self.geometry_cbar.set_label('nm/min')
+        self.geometry_vl.canvas.figure.tight_layout()
         self.geometry_vl.canvas.draw()
     
     @pyqtSlot()
@@ -498,16 +512,10 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
         if omega*self.k>self.model.omega_p_max:
             self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
-        try: 
-            self.film_vl.canvas.figure.clf()
-        except:
-            fig = Figure()
-            self.film_vl.canvas = FigureCanvas(fig)
-            self.film_vl.addWidget(self.film_vl.canvas)
-            self.toolbar1 = NavigationToolbar(self.film_vl.canvas, self.film_plot)
-            self.film_vl.addWidget(self.toolbar1)
-        self.film_vl.canvas.figure.add_subplot(111)
-        ax1f = self.film_vl.canvas.figure.axes[0]
+        
+        
+        
+        ax1f = self.geometry_vl.canvas.figure.axes[1]
         im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
         ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
                   color='black', linewidth=7)
@@ -523,11 +531,21 @@ class App(QMainWindow, design.Ui_MainWindow):
                 return "%.1f" % z
             else:
                 return "%.2f" % z
-        cbar = self.film_vl.canvas.figure.colorbar(im,fraction=0.046, pad=0.04,
-                                                       format=major_formatter)
-        cbar.set_label('% $h_{max}$')
+        try:
+            self.film_cbar.remove()
+        except AttributeError:
+            pass
+        except ValueError:
+            pass
+        self.film_cbar = self.geometry_vl.canvas.figure.colorbar(im,
+                                                                 fraction=0.046, 
+                                                                 pad=0.04,
+                                                                 ax=ax1f,
+                                                                 format=major_formatter)
+        self.film_cbar.set_label('% $h_{max}$')
         ax1f.set_aspect('equal')
-        self.film_vl.canvas.draw()
+        self.geometry_vl.canvas.figure.tight_layout()
+        self.geometry_vl.canvas.draw()
         
         
     @pyqtSlot()    

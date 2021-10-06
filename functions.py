@@ -304,6 +304,7 @@ class Model(QObject):
         '''    
         self.time_f = []
         self.deposition = Deposition(self.rho, self.alpha0, self.F, njobs=self.cores)
+        
         self.success = True
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
@@ -543,19 +544,20 @@ class Worker_single(QObject):
     def xyp(self, a, i):
         x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
         y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
-        
         return x, y
         
     def __call__(self):
-        hs = np.empty_like(self.ind)
+        hs = []
         for i in self.ind:
-            hs[i] = (quad(lambda a: self.F(self.xyp(a, i)), 
-                       self.alpha0_sub, self.NR*2*pi,
-                       limit=int(round(self.max_angle_divisions*360*self.NR)), 
-                       epsrel=self.point_tolerance)[0])
+            a, b = quad(lambda a: self.F(self.xyp(a, i)), 
+                                       self.alpha0_sub, self.NR*2*pi,
+                                       limit=int(round(self.max_angle_divisions*360*self.NR)), 
+                                       epsrel=self.point_tolerance)
+            hs.append(a)
             self.progress_signal.emit()
-        hs = hs/(2*pi*self.omega)
+        hs = np.array(hs)/(2*pi*self.omega)
         return hs
+
     
 
 class Optimizer(QObject):
