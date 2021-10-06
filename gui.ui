@@ -451,7 +451,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QTextBrowser" name="deposition_log">
+            <widget class="QTableView" name="dep_log_table">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Ignored">
                <horstretch>0</horstretch>
@@ -460,8 +460,8 @@
              </property>
              <property name="minimumSize">
               <size>
-               <width>0</width>
-               <height>100</height>
+               <width>100</width>
+               <height>0</height>
               </size>
              </property>
             </widget>

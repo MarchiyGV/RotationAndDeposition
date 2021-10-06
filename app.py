@@ -1,7 +1,8 @@
 from tabulate import tabulate
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QItemSelectionModel, QAbstractItemModel)
+QThread, QItemSelectionModel, QAbstractItemModel, QModelIndex,
+QAbstractTableModel, QVariant)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -57,6 +58,52 @@ class Opt(QThread):
     def run(self):
         self.func_run(*self.args_run)
         
+class Dep_log(QAbstractTableModel):
+    
+    headers = ['R', 'k', 'N', 'omega', 'process\ntime', 'computation\ntime', 'heterogenity', 'error']
+    
+    def __init__(self, data=[], parent=None):
+        super().__init__(parent)
+        self.data = data
+        self.d = [2]*self.columnCount()
+        
+    def set_accuracy(self, i, d):
+        self.d[i] = d
+        
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int):
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Horizontal:
+                return self.headers[section]
+            else:
+                return str(1+section)
+
+    def columnCount(self, parent=None):
+        return len(self.headers)
+
+    def rowCount(self, parent=None):
+        return len(self.data)
+    
+    def data(self, index: QModelIndex, role: int):
+        if not index.isValid():
+            return QVariant()
+        if index.isValid():
+            if role == Qt.DisplayRole:
+                row = index.row()
+                col = index.column()
+                return str(self.data[row][col])
+        
+            
+    def flags(self, index):
+        return Qt.ItemIsEnabled
+    
+    def append(self, row):
+        if len(row)==self.columnCount():
+            for i in range(self.columnCount()):
+                row[i] = round(row[i], self.d[i])
+            self.data.append(row)
+        else:
+            raise ValueError
+        
 
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
@@ -64,6 +111,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.setupUi(self) 
         self.warnbox = QErrorMessage(self)
         self.errorbox = QMessageBox(self)
+        self.deposition_log = Dep_log()
+        self.dep_log_table.setModel(self.deposition_log)
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.DepositionButton.clicked.connect(self.deposition)
@@ -542,12 +591,13 @@ class App(QMainWindow, design.Ui_MainWindow):
         elif het < self.model.point_tolerance*4*100:
             self.deposition_output.append(f'\nДостоверность расчёта неоднородности не может быть гарантированна, так как полученная неоднородность {round(het,2)}% меньше максимально возможной абсолютной погрешности +-{4*self.model.point_tolerance*100}%, однако обычно эта оценка погрешности превосходит реальную погрешность на порядок (т.е. оптимистичный прогноз абсолютной погрешности +-{round_to_1(self.model.point_tolerance*100*4/10)}%). Для достоверности рекомендуется уменьшить параметр "Точность в точке"')
         n = int(ceil(log10(1/omega)))
-        self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
-                                                             'k = ', self.k,
-                                                             'NR = ', self.NR, 
-                                                             'het = ', het, 
-                                                             'omega = ', omega, 
-                                                             'time = ', t))
+        
+        
+        self.deposition_log.append([self.R, self.k, self.NR, omega, proc_time, t, het, self.model.point_tolerance*4*100])
+        self.dep_log_table.model().layoutChanged.emit()
+        self.dep_log_table.resizeColumnsToContents()
+        
+        
         if n <= omega_decimals:
             self.deposition_output.append(f'\nУгловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
         else:
