@@ -86,13 +86,13 @@ class App(QMainWindow, design.Ui_MainWindow):
         else: 
             self.disable_model(True)
         self.R_Slider.valueChanged.connect(self.plot_geometry_upd)
-        self.R_Slider.valueChanged.connect(self.set_R_slider)
-        self.k_Slider.valueChanged.connect(self.set_k_slider)
-        self.NR_Slider.valueChanged.connect(self.set_NR_slider)
+        self.R_Slider.valueChanged.connect(self.set_R)
+        self.k_Slider.valueChanged.connect(self.set_k)
+        self.NR_Slider.valueChanged.connect(self.set_NR)
         self.R_disp.valueChanged.connect(self.plot_geometry_upd)
-        self.R_disp.valueChanged.connect(self.set_R_line)
-        self.k_disp.valueChanged.connect(self.set_k_line)
-        self.NR_disp.valueChanged.connect(self.set_NR_line)
+        self.R_disp.valueChanged.connect(self.set_R)
+        self.k_disp.valueChanged.connect(self.set_k)
+        self.NR_disp.valueChanged.connect(self.set_NR)
         self.thick_edit.editingFinished.connect(self.set_h)
         if success:
                 self.set_R(mean(self.model.R_bounds))
@@ -236,60 +236,76 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.NR_disp.setSingleStep(self.model.NR_step)
         self.k_disp.setDecimals(int(ceil(log10(1/self.model.k_step))))
         self.NR_disp.setDecimals(int(ceil(log10(1/self.model.NR_step))))
-    
+  
     @pyqtSlot()
-    def set_R_line(self):
-        self.R = float(self.R_disp.text())
-        self.set_R()
-    
-    @pyqtSlot()    
-    def set_R_slider(self):
-        self.R = float(self.R_Slider.value())*self.model.R_step
-        self.set_R()
-        
     def set_R(self, value=None):
-        if not value:
-            value = self.R
+        sender = self.sender()
+        if not sender is None:
+            if sender == self.R_Slider:
+                self.R = float(self.R_Slider.value())*self.model.R_step
+                self.R_disp.blockSignals(True)
+                self.R_disp.setValue(self.R)
+                self.R_disp.blockSignals(False)
+            elif sender == self.R_disp:
+                self.R = float(R_disp.value())
+                self.R_Slider.blockSignals(True)
+                self.R_Slider.setValue(int(self.R/self.model.R_step))
+                self.R_Slider.blockSignals(False)
         else:
+            print(value)
+            self.R_disp.blockSignals(True)
+            self.R_Slider.blockSignals(True)
             self.R = value
-        self.R_disp.setValue(self.R)
-        self.R_Slider.setValue(int(self.R/self.model.R_step))
-    
-    @pyqtSlot()
-    def set_k_line(self):
-        self.k = float(self.k_disp.text())
-        self.set_k()
-    
-    @pyqtSlot()
-    def set_k_slider(self):
-        self.k = float(self.k_Slider.value())*self.model.k_step
-        self.set_k()
-        
+            self.R_Slider.setValue(int(self.R/self.model.R_step))
+            self.R_disp.setValue(self.R)
+            self.R_disp.blockSignals(False)
+            self.R_Slider.blockSignals(False)
+            
+    @pyqtSlot()        
     def set_k(self, value=None):
-        if not value:
-            value = self.k
+        sender = self.sender()
+        if not sender is None:
+            if sender == self.k_Slider:
+                self.k = float(self.k_Slider.value())*self.model.k_step
+                self.k_disp.blockSignals(True)
+                self.k_disp.setValue(self.k)
+                self.k_disp.blockSignals(False)
+            elif sender == self.k_disp:
+                self.k = float(k_disp.value())
+                self.k_Slider.blockSignals(True)
+                self.k_Slider.setValue(int(self.k/self.model.k_step))
+                self.k_Slider.blockSignals(False)
         else:
+            self.k_disp.blockSignals(True)
+            self.k_Slider.blockSignals(True)
             self.k = value
-        self.k_disp.setValue(self.k)
-        self.k_Slider.setValue(int(self.k/self.model.k_step))
-    
-    @pyqtSlot()    
-    def set_NR_line(self):
-        self.NR = float(self.NR_disp.text())
-        self.set_NR()
-    
-    @pyqtSlot()    
-    def set_NR_slider(self):
-        self.NR = float(self.NR_Slider.value())*self.model.NR_step
-        self.set_NR()
-        
+            self.k_disp.setValue(self.k)
+            self.k_Slider.setValue(int(self.k/self.model.k_step))
+            self.k_disp.blockSignals(False)
+            self.k_Slider.blockSignals(False)
+            
+    @pyqtSlot() 
     def set_NR(self, value=None):
-        if not value:
-            value = self.NR
+        sender = self.sender()
+        if not sender is None:
+            if sender == self.NR_Slider:
+                self.NR = float(self.NR_Slider.value())*self.model.NR_step
+                self.NR_disp.blockSignals(True)
+                self.NR_disp.setValue(self.NR)
+                self.NR_disp.blockSignals(False)
+            elif sender == self.NR_disp:
+                self.NR = float(NR_disp.value())
+                self.NR_Slider.blockSignals(True)
+                self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
+                self.NR_Slider.blockSignals(False)
         else:
+            self.NR_disp.blockSignals(True)
+            self.NR_Slider.blockSignals(True)
             self.NR = value
-        self.NR_disp.setValue(self.NR)
-        self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
+            self.NR_disp.setValue(self.NR)
+            self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
+            self.NR_disp.blockSignals(False)
+            self.NR_Slider.blockSignals(False)
     
     @pyqtSlot()    
     def set_h(self):
