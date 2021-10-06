@@ -30,7 +30,7 @@ from settings import *
 
 
 
-#pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui2.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
+#pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 font = {'family' : 'normal',
         'size'   : 15}
 
@@ -105,11 +105,27 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.settings.upd_signal.connect(self.update_settings_dependansies)
         self.settings.upd_signal.connect(self.select) #fix one strange problem
         self.p_dep_bar.setValue(0)
+        self.InputWidget.currentChanged.connect(self.tabChanged)
         
     def resizeEvent(self, event):
-        self.mesh_plot_vl.canvas.figure.tight_layout()
-        self.geometry_vl.canvas.figure.tight_layout()
         QMainWindow.resizeEvent(self, event)
+        index = self.InputWidget.currentIndex()
+        print(index)
+        if index == 0:
+            self.mesh_plot_vl.canvas.figure.tight_layout()
+            self.mesh_plot_vl.canvas.figure.tight_layout()
+        if index == 1:
+            self.geometry_vl.canvas.figure.tight_layout()
+            self.geometry_vl.canvas.figure.tight_layout()
+    
+    @pyqtSlot(int)    
+    def tabChanged(self, index):
+        if index == 0:
+            self.mesh_plot_vl.canvas.figure.tight_layout()
+            self.mesh_plot_vl.canvas.figure.tight_layout()
+        if index == 1:
+            self.geometry_vl.canvas.figure.tight_layout()
+            self.geometry_vl.canvas.figure.tight_layout()
         
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
@@ -439,6 +455,11 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax2f.set_ylabel('y, mm')
         ax2f.set_aspect('equal')
         ax2f.set_title('Геометрия источника\n')
+        ax1f = self.geometry_vl.canvas.figure.axes[1]
+        ax1f.set_xlabel('x, mm')
+        ax1f.set_ylabel('y, mm')
+        ax1f.set_title('Толщина плёнки\n')
+        ax1f.set_aspect('equal')
         try:
             self.geometry_cbar.remove()
         except AttributeError:
@@ -482,6 +503,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         I = self.model.deposition.hs
         if I is None:
             return False
+        ###output
         het = self.model.heterogeneity(I)
         thickness = I.mean()
         omega = thickness/self.h
@@ -512,16 +534,12 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.deposition_output.append('\n!!! Превышена максимальная угловая скорость солнца')
         if omega*self.k>self.model.omega_p_max:
             self.deposition_output.append('\n!!! Превышена максимальная угловая скорость планеты')
-        
-        
-        
+        ### plotting
         ax1f = self.geometry_vl.canvas.figure.axes[1]
         im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
         ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
                   color='black', linewidth=7)
-        ax1f.set_xlabel('x, mm')
-        ax1f.set_ylabel('y, mm')
-        ax1f.set_title('Толщина плёнки\n')
+        
         @ticker.FuncFormatter
         def major_formatter(x, pos):
             z = x*100
@@ -543,7 +561,6 @@ class App(QMainWindow, design.Ui_MainWindow):
                                                                  ax=ax1f,
                                                                  format=major_formatter)
         self.film_cbar.set_label('% $h_{max}$')
-        ax1f.set_aspect('equal')
         self.geometry_vl.canvas.figure.tight_layout()
         self.geometry_vl.canvas.draw()
         

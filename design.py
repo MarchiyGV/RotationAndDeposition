@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_test.ui'
+# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
@@ -231,7 +231,7 @@ class Ui_MainWindow(object):
         self.deposition_log.setObjectName("deposition_log")
         self.verticalLayout_10.addWidget(self.deposition_log)
         self.p_dep_bar = QtWidgets.QProgressBar(self.widget_9)
-        self.p_dep_bar.setProperty("value", 24)
+        self.p_dep_bar.setProperty("value", 0)
         self.p_dep_bar.setObjectName("p_dep_bar")
         self.verticalLayout_10.addWidget(self.p_dep_bar)
         self.horizontalLayout_5.addWidget(self.widget_9, 0, QtCore.Qt.AlignHCenter)
