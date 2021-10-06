@@ -1,5 +1,3 @@
-omega_decimals = 2
-
 from tabulate import tabulate
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
@@ -26,6 +24,7 @@ from multiprocessing import freeze_support
 import exception_hooks
 import design
 import functions 
+from global_parameters import *
 from settings import *
 
 def round_to_1(x):
@@ -107,6 +106,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.settings.upd_signal.connect(self.select) #fix one strange problem
         self.p_dep_bar.setValue(0)
         self.InputWidget.currentChanged.connect(self.tabChanged)
+        self.meshBox.stateChanged.connect(self.plot_mesh)
         
     def resizeEvent(self, event):
         QMainWindow.resizeEvent(self, event)
@@ -252,7 +252,6 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.R_Slider.setValue(int(self.R/self.model.R_step))
                 self.R_Slider.blockSignals(False)
         else:
-            print(value)
             self.R_disp.blockSignals(True)
             self.R_Slider.blockSignals(True)
             self.R = value
@@ -564,6 +563,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
         ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
                   color='black', linewidth=7)
+        if self.meshBox.isChecked():
+            self.mesh.remove()
+            self.mesh = ax1f.plot(self.model.xs, self.model.ys, '.', color=mesh_color)[0]
         
         @ticker.FuncFormatter
         def major_formatter(x, pos):
@@ -590,6 +592,15 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.geometry_vl.canvas.draw()
         
         
+    def plot_mesh(self, state):
+        if state==2:
+            ax = self.geometry_vl.canvas.figure.axes[1]
+            self.mesh = ax.plot(self.model.xs, self.model.ys, '.', color=mesh_color)[0]
+            self.geometry_vl.canvas.draw()
+        elif state==0:
+            self.mesh.remove()
+            self.geometry_vl.canvas.draw()
+            
     @pyqtSlot()    
     def optimisation(self): 
         self.optimiseButton.setDisabled(True)

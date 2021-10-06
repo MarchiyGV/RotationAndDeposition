@@ -532,6 +532,13 @@
                    <layout class="QVBoxLayout" name="geometry_vl"/>
                   </widget>
                  </item>
+                 <item>
+                  <widget class="QCheckBox" name="meshBox">
+                   <property name="text">
+                    <string>Отображать сетку</string>
+                   </property>
+                  </widget>
+                 </item>
                 </layout>
                </widget>
               </item>
@@ -541,7 +548,7 @@
            <item>
             <widget class="QTextBrowser" name="deposition_output">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
+              <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -549,13 +556,13 @@
              <property name="minimumSize">
               <size>
                <width>400</width>
-               <height>250</height>
+               <height>225</height>
               </size>
              </property>
              <property name="maximumSize">
               <size>
                <width>16777215</width>
-               <height>300</height>
+               <height>200</height>
               </size>
              </property>
             </widget>
