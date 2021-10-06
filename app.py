@@ -60,13 +60,13 @@ class Opt(QThread):
         
 class Dep_log(QAbstractTableModel):
     
-    headers = ['R', 'k', 'N', 'omega', 'process\ntime', 'computation\ntime', 'heterogenity', 'error']
+    headers = ['R', 'k', 'N', 'omega', 'proc.\ntime', 'comp.\ntime', 'het.', 'err']
     
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
         self.data = data
-        self.d = [2]*self.columnCount()
-        
+        self.d = [0, 2, 2, 2, 0, 1, 2, 2]
+                  
     def set_accuracy(self, i, d):
         self.d[i] = d
         
@@ -99,7 +99,7 @@ class Dep_log(QAbstractTableModel):
     def append(self, row):
         if len(row)==self.columnCount():
             for i in range(self.columnCount()):
-                row[i] = round(row[i], self.d[i])
+                row[i] = round(row[i], int(self.d[i]))
             self.data.append(row)
         else:
             raise ValueError
@@ -113,6 +113,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.errorbox = QMessageBox(self)
         self.deposition_log = Dep_log()
         self.dep_log_table.setModel(self.deposition_log)
+        self.dep_log_table.resizeColumnsToContents()
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.DepositionButton.clicked.connect(self.deposition)
@@ -399,6 +400,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_sliders()
         self.plot_model()
         self.plot_geometry()
+        step = [self.model.R_step, self.model.k_step, self.model.NR_step]
+        for i in range(len(step)):
+            d = ceil(log10(1/step[i]))
+            self.deposition_log.set_accuracy(i, d)
         return True
     
     def plot_model(self):
