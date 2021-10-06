@@ -74,7 +74,7 @@ class Model(QObject):
                  fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
                  magnetron_y, substrate_shape, substrate_radius, 
                  substrate_x_len, substrate_y_len, substrate_res, cores, 
-                 verbose, delete_cache, point_tolerance, max_angle_divisions, 
+                 verbose, delete_cache, point_tolerance, 
                  holder_inner_radius, holder_outer_radius, deposition_len_x, 
                  deposition_len_y, R_step,
                  k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
@@ -109,7 +109,6 @@ class Model(QObject):
         self.verbose = verbose # True: print message each time when function of deposition called
         self.delete_cache = delete_cache
         self.point_tolerance = point_tolerance/100 
-        self.max_angle_divisions = max_angle_divisions 
         self.holder_inner_radius = holder_inner_radius  
         self.holder_outer_radius = holder_outer_radius
         self.deposition_len_x = deposition_len_x 
@@ -303,7 +302,7 @@ class Model(QObject):
             joblib_ignore.append('k')
         '''    
         self.time_f = []
-        self.deposition = Deposition(self.rho, self.alpha0, self.F, njobs=self.cores)
+        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.dep_dr, njobs=self.cores)
         
         self.success = True
         
@@ -340,6 +339,9 @@ class Model(QObject):
         self.deposition_coords_map_x, self.deposition_coords_map_y = meshgrid(self.deposition_coords_x, #np.meshgrid
                                                                        self.deposition_coords_y)
              
+        self.dep_dr = np.min((self.deposition_len_x/M, 
+                              self.deposition_len_y/N))
+        
     def open_simtra_file(self, fname):
         try:
             with open(fname, 'r') as f:
@@ -382,7 +384,7 @@ class Model(QObject):
             success = False
             error('Неверный формат файла с экспериментальным профилем напыления')
         else:
-            dr = r[1:]-r[:-1]
+            dr = np.diff(r)
             res = 1/dr.min()
             self.init_deposition_mesh(res_x=res, res_y=res)
             f = interp1d(r, h, fill_value='extrapolate', bounds_error=False)
@@ -403,8 +405,9 @@ class Model(QObject):
     
 class Deposition(QThread):
     progress_signal = pyqtSignal(float)
+    msg_signal = pyqtSignal(str)
     
-    def __init__(self, rho, alpha, F, njobs=1, parent=None):
+    def __init__(self, rho, alpha, F, dep_dr, njobs=1, parent=None):
         super().__init__(parent)
         self.time = []
         n = len(rho)
@@ -412,7 +415,9 @@ class Deposition(QThread):
         self.count = 0
         self.njobs = njobs
         if njobs == 1:
-            self.workers = [Worker_single(F, rho, alpha)]
+            self.workers = [Worker_single(F, rho, alpha, dep_dr)]
+            self.workers[0].progress_signal.connect(self.progress)
+            self.workers[0].msg_signal.connect(self.msg)
         else:
             rho_p = []
             alpha_p = []
@@ -435,22 +440,24 @@ class Deposition(QThread):
                     rho_p.append(rho[i0+i*m:i0+(i+1)*m])
                     alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
                 
-            self.workers = [Worker(F, rho_p[i], alpha_p[i]) for i in range(njobs)]
+            self.workers = [Worker(F, rho_p[i], alpha_p[i], dep_dr) for i in range(njobs)]
         
     @pyqtSlot()
     def progress(self):
         self.count += 1
-        self.progress_signal.emit(self.count/self.n)    
+        self.progress_signal.emit(self.count/self.n) 
+        
+    @pyqtSlot(str)    
+    def msg(self, s):
+        self.msg_signal.emit(s) 
             
-    def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, 
-                 max_angle_divisions, cores):
+    def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, cores):
          self.R = R
          self.k = k
          self.NR = NR
          self.omega = omega
          self.alpha0_sub = alpha0_sub
          self.point_tolerance = point_tolerance
-         self.max_angle_divisions = max_angle_divisions 
          self.cores = cores
          self.count = 0
          
@@ -461,24 +468,19 @@ class Deposition(QThread):
         omega = self.omega
         alpha0_sub = self.alpha0_sub
         point_tolerance = self.point_tolerance
-        max_angle_divisions = self.max_angle_divisions 
         t0 = time.time()
         
         if self.njobs == 1:
             self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
-                                           point_tolerance, max_angle_divisions)
-            try:
-                self.workers[0].progress_signal.disconnect()
-            except:
-                pass
-            self.workers[0].progress_signal.connect(self.progress)
+                                           point_tolerance)
+            
             self.hs = self.workers[0]()
         else:
             hs = []
             result = []
             for worker in self.workers:
                 worker.set_properties(R, k, NR, omega, alpha0_sub,
-                                      point_tolerance, max_angle_divisions)
+                                      point_tolerance)
     
             with Pool(processes=len(self.workers)) as pool:      
                 for worker in self.workers:
@@ -491,21 +493,21 @@ class Deposition(QThread):
     
 
 class Worker:
-    def __init__(self, F, rho, alpha):
+    def __init__(self, F, rho, alpha, dep_dr):
         self.F = F
         self.rho = rho
         self.alpha = alpha
         self.ind = range(len(rho))
         self.hs = None
+        self.dep_dr = dep_dr
         
     def set_properties(self, R, k, NR, omega, alpha0_sub,
-                       point_tolerance, max_angle_divisions):
+                       point_tolerance):
         self.R = R
         self.k = k
         self.NR = NR
         self.omega = omega
         self.alpha0_sub = alpha0_sub
-        self.max_angle_divisions = max_angle_divisions
         self.point_tolerance = point_tolerance
         
     def xyp(self, a, i):
@@ -514,32 +516,36 @@ class Worker:
         return x, y
         
     def __call__(self):
+        ns = np.round(2*pi*self.NR*(self.R+self.rho*self.k)/self.dep_dr)
         hs = [quad(lambda a: self.F(self.xyp(a, i)), 
                    self.alpha0_sub, self.NR*2*pi,
-                   limit=int(round(self.max_angle_divisions*360*self.NR)), 
+                   limit=int(ns[i]), 
                    epsrel=self.point_tolerance)[0] for i in self.ind]
         hs = np.array(hs)/(2*pi*self.omega)
         return hs
     
 class Worker_single(QObject):
     progress_signal = pyqtSignal()
-    def __init__(self, F, rho, alpha, parent=None):
+    msg_signal = pyqtSignal(str)
+    
+    def __init__(self, F, rho, alpha, dep_dr, parent=None):
         super().__init__(parent)
         self.F = F
         self.rho = rho
         self.alpha = alpha
         self.ind = range(len(rho))
         self.hs = None
+        self.dep_dr = dep_dr
         
     def set_properties(self, R, k, NR, omega, alpha0_sub,
-                       point_tolerance, max_angle_divisions):
+                       point_tolerance):
         self.R = R
         self.k = k
         self.NR = NR
         self.omega = omega
         self.alpha0_sub = alpha0_sub
-        self.max_angle_divisions = max_angle_divisions
         self.point_tolerance = point_tolerance
+        
         
     def xyp(self, a, i):
         x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
@@ -549,11 +555,20 @@ class Worker_single(QObject):
     def __call__(self):
         hs = []
         for i in self.ind:
-            a, b = quad(lambda a: self.F(self.xyp(a, i)), 
+            n = int(round(2*pi*self.NR*(self.R+self.rho[i]*self.k)/self.dep_dr/21))
+            res = quad(lambda a: self.F(self.xyp(a, i)), 
                                        self.alpha0_sub, self.NR*2*pi,
-                                       limit=int(round(self.max_angle_divisions*360*self.NR)), 
-                                       epsrel=self.point_tolerance)
-            hs.append(a)
+                                       limit=n, 
+                                       epsrel=self.point_tolerance,
+                                       full_output=1)
+            
+            if len(res)==4:
+                self.msg_signal.emit(str(res[3]))
+            k = res[2]['last']    
+            if k>=n:
+                self.msg_signal.emit('Погрешность может быть недооценена из-за слишком грубой дискретизации профиля напыления')
+            print(f'{k} from {n}')
+            hs.append(res[0])
             self.progress_signal.emit()
         hs = np.array(hs)/(2*pi*self.omega)
         return hs
@@ -567,7 +582,7 @@ class Optimizer(QObject):
         self.deposition = deposition
         
     def optimisation(self, heterogeneity,
-                     alpha0_sub, point_tolerance, max_angle_divisions, cores, 
+                     alpha0_sub, point_tolerance, cores, 
                      R_bounds, k_bounds, NR_bounds, 
                      R_min_step, k_min_step, NR_min_step, 
                      R_step, k_step, NR_step,
@@ -580,7 +595,6 @@ class Optimizer(QObject):
         self.log = ''
         self.alpha0_sub = alpha0_sub
         self.point_tolerance = point_tolerance
-        self.max_angle_divisions = max_angle_divisions
         self.cores = cores
         self.R_bounds = R_bounds
         self.k_bounds = k_bounds
@@ -640,8 +654,7 @@ class Optimizer(QObject):
             c+=gate*(self.k_bounds[0]+delta[1]-x[1])
         if x[1]>self.k_bounds[1]-delta[1]:  
             c+=gate*(x[1]+delta[1]-self.k_bounds[0])
-        args = [*x, 1, self.alpha0_sub, self.point_tolerance, 
-                self.max_angle_divisions, self.cores]
+        args = [*x, 1, self.alpha0_sub, self.point_tolerance, self.cores]
         h = self.heterogeneity(self.deposition(*args))
         if self.verbose: 
             message = 'At R = %.2f, k = %.3f, NR = %.2f ---------- heterogeneity = %.2f ' % (*x, h)

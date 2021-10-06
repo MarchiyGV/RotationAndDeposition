@@ -1,7 +1,7 @@
 omega_decimals = 2
 
 from tabulate import tabulate
-from math import ceil
+from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
 QThread, QItemSelectionModel, QAbstractItemModel)
 from PyQt5.QtWidgets import (
@@ -28,7 +28,8 @@ import design
 import functions 
 from settings import *
 
-
+def round_to_1(x):
+   return round(x, -int(floor(log10(abs(x)))))
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 font = {'family' : 'normal',
@@ -110,7 +111,6 @@ class App(QMainWindow, design.Ui_MainWindow):
     def resizeEvent(self, event):
         QMainWindow.resizeEvent(self, event)
         index = self.InputWidget.currentIndex()
-        print(index)
         if index == 0:
             self.mesh_plot_vl.canvas.figure.tight_layout()
             self.mesh_plot_vl.canvas.figure.tight_layout()
@@ -316,6 +316,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model.update(**settings)
         self.model.deposition.finished.connect(self.deposition_plot)
         self.model.deposition.progress_signal.connect(self.deposition_progress)
+        self.model.deposition.msg_signal.connect(self.deposition_logout)
         if self.model.success:
             self.disable_model(False)
         else:
@@ -476,30 +477,39 @@ class App(QMainWindow, design.Ui_MainWindow):
     
     @pyqtSlot()
     def deposition(self):
+        self.deposition_output.setText('')
+        self.dep_terminated=False
+        self.dep_msg = []
         self.DepositionButton.setDisabled(True)
         self.cancel_dep_button.setDisabled(False)
         args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
-                self.model.point_tolerance, self.model.max_angle_divisions,
-                self.model.cores]
+                self.model.point_tolerance, self.model.cores]
         self.model.deposition.task(*args)
         self.p_dep_bar.setValue(0)
         self.model.deposition.start()
         
-    #def _deposition(self, args):
-        
-    
     @pyqtSlot()
     def deposition_stop(self):
+        self.dep_terminated=True
         self.model.deposition.terminate()  
-        
+               
     @pyqtSlot(float)
     def deposition_progress(self, progress):
         self.p_dep_bar.setValue(int(round(progress*100)))
+        
+    @pyqtSlot(str)
+    def deposition_logout(self, s):
+        if s not in self.dep_msg:
+            self.dep_msg.append(s)
+            s = s.replace('\n', '').replace('  ', ' ').replace('  ', ' ')
+            self.deposition_output.append(s+'\n')
         
     @pyqtSlot()    
     def deposition_plot(self):
         self.DepositionButton.setDisabled(False)
         self.cancel_dep_button.setDisabled(True)
+        if self.dep_terminated:
+            return False
         I = self.model.deposition.hs
         if I is None:
             return False
@@ -509,14 +519,13 @@ class App(QMainWindow, design.Ui_MainWindow):
         omega = thickness/self.h
         proc_time = self.NR/omega
         t = self.model.deposition.time[-1]
-        self.deposition_output.setText('')
-        self.deposition_output.append(f'Неоднородность: ({round(het,2)} +- {4*self.model.point_tolerance*100})%\n')
-        if het < self.model.point_tolerance*100:
-            msg = f'Резултат расчёта неоднородности может быть неверным, так как полученная неоднородность {round(het,2)}% меньше заданной точности расчёта толщины в точке {self.model.point_tolerance*100}\nНеобходимо уменьшить параметр "Точность в точке"' 
+        self.deposition_output.append(f'Неоднородность: ({round(het,2)} +- {round_to_1(4*self.model.point_tolerance*100)})%')
+        if het < self.model.point_tolerance*100*4/10:
+            msg = f'\nРезултат расчёта неоднородности может быть неверным, так как полученная неоднородность {round(het,2)}% меньше заданной точности расчёта {4*self.model.point_tolerance*100}% более чем на порядок. \nНеобходимо уменьшить параметр "Точность в точке"' 
             self.warn(msg)
             self.deposition_output.append(msg)
         elif het < self.model.point_tolerance*4*100:
-            self.deposition_output.append(f'Достоверность расчёта неоднородности не может быть гарантированна, так как полученная неоднородность {round(het,2)}% меньше максимально возможной погрешности {4*self.model.point_tolerance*100}\nРекомендуется уменьшить параметр "Точность в точке"')
+            self.deposition_output.append(f'\nДостоверность расчёта неоднородности не может быть гарантированна, так как полученная неоднородность {round(het,2)}% меньше максимально возможной абсолютной погрешности +-{4*self.model.point_tolerance*100}%, однако обычно эта оценка погрешности превосходит реальную погрешность на порядок (т.е. оптимистичный прогноз абсолютной погрешности +-{round_to_1(self.model.point_tolerance*100*4/10)}%). Для достоверности рекомендуется уменьшить параметр "Точность в точке"')
         n = int(ceil(log10(1/omega)))
         self.deposition_log.append(('{}{: <4.2f}|'*6).format('R = ', self.R, 
                                                              'k = ', self.k,
@@ -527,7 +536,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         if n <= omega_decimals:
             self.deposition_output.append(f'\nУгловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
         else:
-            self.deposition_output.append('Угловая скорость: %.2fe-%d оборотов/мин.' % (omega*(10**n), n))
+            self.deposition_output.append('\nУгловая скорость: %.2fe-%d оборотов/мин.' % (omega*(10**n), n))
         self.deposition_output.append('\nВремя процесса: %d мин.' % (proc_time))
         self.deposition_output.append(f'\nВремя расчёта: {round(t,2)}s')
         if omega>self.model.omega_s_max:
@@ -571,8 +580,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.cancelOptimiseButton.setDisabled(False)      
         self.optimisationLog.setText('Log: \n') 
         args = [self.model.heterogeneity, self.model.alpha0_sub, 
-                self.model.point_tolerance, self.model.max_angle_divisions, 
-                self.model.cores, 
+                self.model.point_tolerance, self.model.cores, 
                 self.model.R_bounds, self.model.k_bounds, self.model.NR_bounds, 
                 self.model.R_min_step, self.model.k_min_step, 
                 self.model.NR_min_step, 
