@@ -345,7 +345,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.R_disp.setValue(self.R)
                 self.R_disp.blockSignals(False)
             elif sender == self.R_disp:
-                self.R = float(R_disp.value())
+                self.R = float(self.R_disp.value())
                 self.R_Slider.blockSignals(True)
                 self.R_Slider.setValue(int(self.R/self.model.R_step))
                 self.R_Slider.blockSignals(False)
@@ -368,7 +368,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.k_disp.setValue(self.k)
                 self.k_disp.blockSignals(False)
             elif sender == self.k_disp:
-                self.k = float(k_disp.value())
+                self.k = float(self.k_disp.value())
                 self.k_Slider.blockSignals(True)
                 self.k_Slider.setValue(int(self.k/self.model.k_step))
                 self.k_Slider.blockSignals(False)
@@ -391,7 +391,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.NR_disp.setValue(self.NR)
                 self.NR_disp.blockSignals(False)
             elif sender == self.NR_disp:
-                self.NR = float(NR_disp.value())
+                self.NR = float(self.NR_disp.value())
                 self.NR_Slider.blockSignals(True)
                 self.NR_Slider.setValue(int(self.NR/self.model.NR_step))
                 self.NR_Slider.blockSignals(False)
