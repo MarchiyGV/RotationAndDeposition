@@ -102,7 +102,10 @@ class Model(QObject):
             self.substrate_radius = sqrt(substrate_x_len**2+substrate_y_len**2)/2
         self.substrate_x_len = substrate_x_len # Substrate width, mm
         self.substrate_y_len = substrate_y_len # Substrate length, mm
-        self.substrate_res = substrate_res # Substrate x resolution, 1/mm
+        #self.n_sup_points = n_sup_points
+        #if substrate_shape == 'Circle':
+            
+        self.substrate_res = substrate_res
         self.substrate_rows = ceil(substrate_y_len*substrate_res)
         self.substrate_columns = ceil(substrate_x_len*substrate_res)
         self.cores = cores # number of jobs for paralleling
@@ -213,8 +216,6 @@ class Model(QObject):
                     return False
         else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
         
-        
-            
         ang=arange(0, 2*pi,0.01) #np.aarange
         self.holder_circle_inner_x=holder_inner_radius*cos(ang) #np.cos
         self.holder_circle_inner_y=holder_inner_radius*sin(ang) #np.sin
@@ -222,17 +223,16 @@ class Model(QObject):
         self.holder_circle_outer_y=holder_outer_radius*sin(ang) #np.sin 
         
         #### depoition profile meshing
-  
-        substrate_coords_x = linspace(-substrate_x_len/2, substrate_x_len/2, 
-                                         num=self.substrate_columns)
-        
-        substrate_coords_y = linspace(-substrate_y_len/2, substrate_y_len/2, 
-                                         num=self.substrate_rows)
-        
-        self.substrate_coords_map_x, self.substrate_coords_map_y = meshgrid(substrate_coords_x, 
-                                                                     substrate_coords_y)
-        
         if substrate_shape == 'Rectangle':
+            substrate_coords_x = linspace(-substrate_x_len/2, substrate_x_len/2, 
+                                             num=self.substrate_columns)
+            
+            substrate_coords_y = linspace(-substrate_y_len/2, substrate_y_len/2, 
+                                             num=self.substrate_rows)
+            
+            self.substrate_coords_map_x, self.substrate_coords_map_y = meshgrid(substrate_coords_x, 
+                                                                         substrate_coords_y)
+               
             self.substrate_rect_x = [substrate_coords_x.min(), substrate_coords_x.max(), 
                                 substrate_coords_x.max(), substrate_coords_x.min(), 
                                 substrate_coords_x.min()]
