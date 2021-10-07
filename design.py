@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui_test.ui'
+# Form implementation generated from reading ui file 'C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui'
 #
 # Created by: PyQt5 UI code generator 5.9.2
 #
@@ -428,7 +428,7 @@ class Ui_MainWindow(object):
         self.actionenter.setObjectName("actionenter")
 
         self.retranslateUi(MainWindow)
-        self.InputWidget.setCurrentIndex(1)
+        self.InputWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -436,7 +436,7 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "Thickness calculator"))
         self.open_settings_Button.setText(_translate("MainWindow", "Загрузить настройки"))
         self.save_settings_Button.setText(_translate("MainWindow", "Сохранить настройки"))
-        self.update_model_Button.setToolTip(_translate("MainWindow", "Press Ctrl+Enter"))
+        self.update_model_Button.setToolTip(_translate("MainWindow", "Press Enter"))
         self.update_model_Button.setText(_translate("MainWindow", "Обновить модель"))
         self.InputWidget.setTabText(self.InputWidget.indexOf(self.Model), _translate("MainWindow", "Модель"))
         self.label_4.setText(_translate("MainWindow", "Толщина"))
