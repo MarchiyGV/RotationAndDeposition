@@ -40,7 +40,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="Model">
        <attribute name="title">
@@ -125,7 +125,7 @@
               </sizepolicy>
              </property>
              <property name="toolTip">
-              <string>Press Ctrl+Enter</string>
+              <string>Press Enter</string>
              </property>
              <property name="text">
               <string>Обновить модель</string>

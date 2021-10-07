@@ -18,6 +18,8 @@ import numpy as np
 class Settings(QAbstractTableModel):
     
     upd_signal = pyqtSignal(int)
+    editing = pyqtSignal()
+    editingFinished = pyqtSignal(int)
     index_id = 0
     index_name = 1
     index_variableName = 2
@@ -92,9 +94,15 @@ class Settings(QAbstractTableModel):
                 elif col==self.index_value:
                     if self.data[row][self.index_type]=='filename':
                         return self.data[row][col]
-            if role == Qt.DisplayRole or role == Qt.EditRole:
+            if role == Qt.DisplayRole:
                 row = index.row()
                 col = index.column()
+                return str(self.data[row][col])
+            
+            if role == Qt.EditRole:
+                row = index.row()
+                col = index.column()
+                self.editing.emit()
                 return str(self.data[row][col])
         
     def wrap(self):
@@ -109,14 +117,18 @@ class Settings(QAbstractTableModel):
     def flags(self, index):
         if index.column()==self.index_value:
             return Qt.ItemIsEnabled | Qt.ItemIsEditable
-        if index.column()==self.index_name or index.column()==self.index_units:
+        elif index.column()==self.index_name:
+            return Qt.ItemIsSelectable | Qt.ItemIsEnabled
+        elif index.column()==self.index_units:
             return Qt.ItemIsEnabled
         else: 
-            return Qt.ItemIsEnabled
+            return Qt.NoItemFlags
+        
 
     def setData(self, index, value, role):
         if role == Qt.EditRole and value!='':
             i = index.row()
+            self.editingFinished.emit(i)
             value, flag = self.suit(i, value)
             if flag:
                 self.data[i][self.index_value] = value

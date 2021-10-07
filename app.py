@@ -1,6 +1,6 @@
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QModelIndex, QAbstractTableModel, QVariant)
+QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (
     QErrorMessage,
     QMessageBox,
     QShortcut,
-    QLineEdit
+    QLineEdit,
+    QTableView
 )
 from PyQt5.QtGui import QKeySequence, QFocusEvent, QKeyEvent, QCursor
 import matplotlib
@@ -135,9 +136,12 @@ class MyLineEdit(QLineEdit):
     
     @pyqtSlot(QKeyEvent)
     def keyPressEvent(self, event):
-        QLineEdit.keyPressEvent(self, event)
+        print('fwfwe')
         if event.key() == Qt.Key_Return:
+            
             self.clearFocus()
+        QLineEdit.keyPressEvent(self, event)
+            
 
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
@@ -148,6 +152,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.deposition_log = Dep_log()
         self.dep_log_table.setModel(self.deposition_log)
         self.dep_log_table.resizeColumnsToContents()
+        self.dep_log_table.horizontalHeader().setStretchLastSection(True)
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.DepositionButton.clicked.connect(self.deposition)
@@ -156,7 +161,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
         self.shortcut_deposite = QShortcut('Return', self.Deposition)
-        self.shortcut_update = QShortcut(QKeySequence("Ctrl+Return"), self.Model)
+        self.shortcut_update = QShortcut('Return', self.Model)
         self.shortcut_deposite.activated.connect(self.DepositionButton.clicked.emit)
         self.shortcut_update.activated.connect(self.update_model_Button.clicked.emit)
         self.model = functions.Model()
@@ -187,7 +192,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.optimiseButton.clicked.connect(self.optimisation)
         self.optimisationLog.setText('Log: \n')
         self.settings.upd_signal.connect(self.update_settings_dependansies)
-        self.settings.upd_signal.connect(self.select) #fix one strange problem
+        self.settings.editingFinished.connect(self.select) #fix one strange problem
         self.p_dep_bar.setValue(0)
         self.InputWidget.currentChanged.connect(self.tabChanged)
         self.meshBox.stateChanged.connect(self.plot_mesh)
@@ -203,10 +208,12 @@ class App(QMainWindow, design.Ui_MainWindow):
     @pyqtSlot()    
     def disable_return_shortcut(self):
         self.shortcut_deposite.setEnabled(False)
+        self.shortcut_update.setEnabled(False)
         
     @pyqtSlot()    
     def enable_return_shortcut(self):
         self.shortcut_deposite.setEnabled(True)
+        self.shortcut_update.setEnabled(True)
         
     @pyqtSlot()    
     def set_settings(self):
@@ -239,7 +246,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
-        selection = self.table_settings.model().index(row, 0)
+        selection = self.table_settings.model().index(row, self.settings.index_name)
         self.table_settings.setCurrentIndex(selection)
             
     def disable_model(self, flag):
@@ -298,6 +305,10 @@ class App(QMainWindow, design.Ui_MainWindow):
         i = self.settings.index_value
         resize = 2
         self.table_settings.setColumnWidth(i, self.table_settings.columnWidth(i)*resize)
+        i = self.settings.index_units
+        resize = 0.5
+        self.table_settings.setColumnWidth(i, self.table_settings.columnWidth(i)*resize)
+        self.table_settings.horizontalHeader().setStretchLastSection(True)
         ### optimize tab
         self.opt_settings = QSortFilterProxyModel()
         self.opt_settings.setSourceModel(self.settings) 
@@ -312,6 +323,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_settings_dependansies()
         self.settings.upd_signal.connect(self.update_settings_dependansies)
         self.settings.upd_signal.connect(self.select) #fix one strange problem
+        self.settings.editing.connect(self.disable_return_shortcut)
+        self.settings.editingFinished.connect(self.enable_return_shortcut)
         return True
         
     @pyqtSlot()
@@ -664,8 +677,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         
         self.deposition_log.append([self.R, self.k, self.NR, omega, proc_time, t, het, self.model.point_tolerance*4*100])
         self.dep_log_table.model().layoutChanged.emit()
-        self.dep_log_table.resizeColumnsToContents()
-        
+        for i in range(self.deposition_log.columnCount()-1):
+            self.dep_log_table.resizeColumnToContents(i)
+        self.dep_log_table.horizontalHeader().setStretchLastSection(True)
         
         if n <= omega_decimals:
             self.deposition_output.append(f'\nУгловая скорость: %.{omega_decimals}f оборотов/мин.' % omega)
