@@ -618,6 +618,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.dep_terminated=False
         self.dep_msg = []
         self.DepositionButton.setDisabled(True)
+        self.disable_return_shortcut()
         self.cancel_dep_button.setDisabled(False)
         args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
                 self.model.point_tolerance, self.model.cores]
@@ -645,6 +646,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     def deposition_plot(self):
         self.DepositionButton.setDisabled(False)
         self.cancel_dep_button.setDisabled(True)
+        self.enable_return_shortcut()
         if self.dep_terminated:
             return False
         I = self.model.deposition.hs
