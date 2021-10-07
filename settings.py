@@ -123,6 +123,18 @@ class Settings(QAbstractTableModel):
                 self.upd_signal.emit(i)
                 return True
         return False
+    
+    def setNamedData(self, varname, value):
+        varnames = self.data[:, self.index_variableName]
+        index = np.where(varnames==varname)[0][0]
+        value, flag = self.suit(index, value)
+        if flag:
+            if value == self.data[index][self.index_value]:
+                return False
+            self.data[index][self.index_value] = value
+            return True
+        else:
+            return False
         
     def suit(self, raw_index, value):
         value_type = self.data[raw_index][self.index_type] 

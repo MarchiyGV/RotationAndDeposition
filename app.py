@@ -1,8 +1,6 @@
-from tabulate import tabulate
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QItemSelectionModel, QAbstractItemModel, QModelIndex,
-QAbstractTableModel, QVariant)
+QThread, QModelIndex, QAbstractTableModel, QVariant)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -11,9 +9,10 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QErrorMessage,
     QMessageBox,
-    QShortcut
+    QShortcut,
+    QLineEdit
 )
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QFocusEvent, QKeyEvent
 import matplotlib
 import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -103,7 +102,30 @@ class Dep_log(QAbstractTableModel):
             self.data.append(row)
         else:
             raise ValueError
-        
+
+class MyLineEdit(QLineEdit):
+    
+    focused = pyqtSignal()
+    unfocused = pyqtSignal()
+    
+    def __init__(self, *args, **kwargs):
+        super(MyLineEdit, self).__init__(*args, **kwargs) #call to superclass        
+    
+    @pyqtSlot(QFocusEvent)
+    def focusInEvent(self, event):
+        QLineEdit.focusInEvent(self, event)
+        self.focused.emit()
+    
+    @pyqtSlot(QFocusEvent)
+    def focusOutEvent(self, event):
+        QLineEdit.focusOutEvent(self, event)
+        self.unfocused.emit()
+    
+    @pyqtSlot(QKeyEvent)
+    def keyPressEvent(self, event):
+        QLineEdit.keyPressEvent(self, event)
+        if event.key() == Qt.Key_Return:
+            self.clearFocus()
 
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
@@ -157,7 +179,33 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.p_dep_bar.setValue(0)
         self.InputWidget.currentChanged.connect(self.tabChanged)
         self.meshBox.stateChanged.connect(self.plot_mesh)
+        self.tolerance_edit.focused.connect(self.disable_return_shortcut)
+        self.tolerance_edit.unfocused.connect(self.enable_return_shortcut)
+        self.sub_res_edit.focused.connect(self.disable_return_shortcut)
+        self.sub_res_edit.unfocused.connect(self.enable_return_shortcut)
+        self.thick_edit.focused.connect(self.disable_return_shortcut)
+        self.thick_edit.unfocused.connect(self.enable_return_shortcut)
+        self.tolerance_edit.editingFinished.connect(self.set_settings)
+        self.sub_res_edit.editingFinished.connect(self.set_settings)
         
+    @pyqtSlot()    
+    def disable_return_shortcut(self):
+        self.shortcut_deposite.setEnabled(False)
+        
+    @pyqtSlot()    
+    def enable_return_shortcut(self):
+        self.shortcut_deposite.setEnabled(True)
+        
+    @pyqtSlot()    
+    def set_settings(self):
+        sender = self.sender()
+        d = {'tolerance_edit': 'point_tolerance', 
+             'sub_res_edit':  'substrate_res'}
+        varname = d[sender.objectName()]
+        value = sender.text()
+        success = self.settings.setNamedData(varname, value)
+        if success:
+            self.update_model()
     def resizeEvent(self, event):
         QMainWindow.resizeEvent(self, event)
         index = self.InputWidget.currentIndex()
@@ -404,6 +452,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         for i in range(len(step)):
             d = ceil(log10(1/step[i]))
             self.deposition_log.set_accuracy(i, d)
+        self.tolerance_edit.setText(str(self.model.point_tolerance*100))
+        self.sub_res_edit.setText(str(self.model.substrate_res))
+        self.plot_mesh()
         return True
     
     def plot_model(self):
@@ -646,8 +697,12 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.geometry_vl.canvas.figure.tight_layout()
         self.geometry_vl.canvas.draw()
         
-        
-    def plot_mesh(self, state):
+    @pyqtSlot(int)    
+    def plot_mesh(self, state=None):
+        if state is None:
+            state = self.meshBox.checkState()
+            if state == 0:
+                return
         if state==2:
             ax = self.geometry_vl.canvas.figure.axes[1]
             self.mesh = ax.plot(self.model.xs, self.model.ys, '.', color=mesh_color)[0]
