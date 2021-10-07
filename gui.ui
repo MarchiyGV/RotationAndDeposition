@@ -890,12 +890,12 @@
   <customwidget>
    <class>MyLineEdit</class>
    <extends>QLineEdit</extends>
-   <header>app</header>
+   <header>custom_widgets</header>
   </customwidget>
   <customwidget>
    <class>MyTableView</class>
    <extends>QTableView</extends>
-   <header>app</header>
+   <header>custom_widgets</header>
   </customwidget>
  </customwidgets>
  <resources/>

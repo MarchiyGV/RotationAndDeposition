@@ -1,6 +1,6 @@
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication, QEvent, QPoint)
+QThread, QModelIndex, QAbstractTableModel, QVariant, QPoint)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -9,11 +9,9 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QErrorMessage,
     QMessageBox,
-    QShortcut,
-    QLineEdit,
-    QTableView
+    QShortcut
 )
-from PyQt5.QtGui import QKeySequence, QFocusEvent, QKeyEvent, QCursor
+from PyQt5.QtGui import QCursor
 import matplotlib
 import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -115,45 +113,6 @@ class Dep_log(QAbstractTableModel):
             self.data.append(row)
         else:
             raise ValueError
-
-class MyLineEdit(QLineEdit):
-    
-    focused = pyqtSignal()
-    unfocused = pyqtSignal()
-    
-    def __init__(self, *args, **kwargs):
-        super(MyLineEdit, self).__init__(*args, **kwargs) #call to superclass        
-    
-    @pyqtSlot(QFocusEvent)
-    def focusInEvent(self, event):
-        QLineEdit.focusInEvent(self, event)
-        self.focused.emit()
-    
-    @pyqtSlot(QFocusEvent)
-    def focusOutEvent(self, event):
-        QLineEdit.focusOutEvent(self, event)
-        self.unfocused.emit()
-    
-    @pyqtSlot(QKeyEvent)
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Return:
-            self.clearFocus()
-        QLineEdit.keyPressEvent(self, event)
-        
-class MyTableView(QTableView):
-    
-    enter_pressed = pyqtSignal(int)
-    
-    def __init__(self, *args, **kwargs):
-        super(MyTableView, self).__init__(*args, **kwargs) #call to superclass        
-    
-    @pyqtSlot(QKeyEvent)
-    def keyPressEvent(self, event):
-        QTableView.keyPressEvent(self, event)
-        if event.key() == Qt.Key_Return:
-            row = self.currentIndex().row()
-            self.enter_pressed.emit(row)
-        
         
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
@@ -283,7 +242,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     def disable_model(self, flag):
         self.DepositionButton.setDisabled(flag)
         self.optimiseButton.setDisabled(flag)
-        self.shortcut_deposite.setEnabled(self.InputWidget.currentIndex()==1 and not flag)
+        self.shortcut_deposite.setEnabled(not flag)
         
     def set_delegates(self, table_view, proxy_model):
         l = 0
