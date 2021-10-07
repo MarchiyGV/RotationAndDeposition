@@ -136,9 +136,7 @@ class MyLineEdit(QLineEdit):
     
     @pyqtSlot(QKeyEvent)
     def keyPressEvent(self, event):
-        print('fwfwe')
         if event.key() == Qt.Key_Return:
-            
             self.clearFocus()
         QLineEdit.keyPressEvent(self, event)
             
