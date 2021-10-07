@@ -1,6 +1,6 @@
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication)
+QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication, QEvent)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -139,8 +139,18 @@ class MyLineEdit(QLineEdit):
         if event.key() == Qt.Key_Return:
             self.clearFocus()
         QLineEdit.keyPressEvent(self, event)
-            
-
+        
+class MyTableView(QTableView):
+    scrolled = pyqtSignal()
+    
+    def __init__(self, *args, **kwargs):
+        super(MyTableView, self).__init__(*args, **kwargs) #call to superclass 
+        
+    @pyqtSlot(QEvent)
+    def wheelEvent(self, event):
+        self.scrolled.emit()
+        return QTableView.wheelEvent(self, event)
+        
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
@@ -189,8 +199,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.thick_edit.setText(str(self.h))
         self.optimiseButton.clicked.connect(self.optimisation)
         self.optimisationLog.setText('Log: \n')
-        self.settings.upd_signal.connect(self.update_settings_dependansies)
-        self.settings.editingFinished.connect(self.select) #fix one strange problem
         self.p_dep_bar.setValue(0)
         self.InputWidget.currentChanged.connect(self.tabChanged)
         self.meshBox.stateChanged.connect(self.plot_mesh)
@@ -203,6 +211,14 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.tolerance_edit.editingFinished.connect(self.set_settings)
         self.sub_res_edit.editingFinished.connect(self.set_settings)
         
+    @pyqtSlot()
+    def _set_tab_settings_skrolled(self):
+        self._tab_settings_skrolled = True
+        
+    @pyqtSlot()
+    def _set_tab_settings_not_skrolled(self):
+        self._tab_settings_skrolled = False
+    
     @pyqtSlot()    
     def disable_return_shortcut(self):
         self.shortcut_deposite.setEnabled(False)
@@ -244,8 +260,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
-        selection = self.table_settings.model().index(row, self.settings.index_name)
-        self.table_settings.setCurrentIndex(selection)
+        if not self._tab_settings_skrolled:
+            selection = self.table_settings.model().index(row, self.settings.index_name)
+            self.table_settings.setCurrentIndex(selection)
             
     def disable_model(self, flag):
         self.DepositionButton.setDisabled(flag)
@@ -321,8 +338,12 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_settings_dependansies()
         self.settings.upd_signal.connect(self.update_settings_dependansies)
         self.settings.upd_signal.connect(self.select) #fix one strange problem
+        self.settings.noupd_signal.connect(self.select) #fix one strange problem
         self.settings.editing.connect(self.disable_return_shortcut)
         self.settings.editingFinished.connect(self.enable_return_shortcut)
+        self._tab_settings_skrolled = False
+        self.table_settings.scrolled.connect(self._set_tab_settings_skrolled)
+        self.settings.editing.connect(self._set_tab_settings_not_skrolled)
         return True
         
     @pyqtSlot()

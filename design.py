@@ -42,7 +42,7 @@ class Ui_MainWindow(object):
         self.widget_3.setObjectName("widget_3")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.widget_3)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.table_settings = QtWidgets.QTableView(self.widget_3)
+        self.table_settings = MyTableView(self.widget_3)
         self.table_settings.setEnabled(True)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
@@ -459,4 +459,4 @@ class Ui_MainWindow(object):
         self.actionenter.setText(_translate("MainWindow", "enter"))
         self.actionenter.setShortcut(_translate("MainWindow", "Return"))
 
-from app import MyLineEdit
+from app import MyLineEdit, MyTableView

@@ -18,6 +18,7 @@ import numpy as np
 class Settings(QAbstractTableModel):
     
     upd_signal = pyqtSignal(int)
+    noupd_signal = pyqtSignal(int)
     editing = pyqtSignal()
     editingFinished = pyqtSignal(int)
     index_id = 0
@@ -130,10 +131,14 @@ class Settings(QAbstractTableModel):
             i = index.row()
             self.editingFinished.emit(i)
             value, flag = self.suit(i, value)
+            if value == self.data[i][self.index_value]:
+                self.noupd_signal.emit(i)
+                return False
             if flag:
                 self.data[i][self.index_value] = value
                 self.upd_signal.emit(i)
                 return True
+            self.upd_signal.emit(i)
         return False
     
     def setNamedData(self, varname, value):

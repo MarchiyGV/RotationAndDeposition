@@ -63,7 +63,7 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
-            <widget class="QTableView" name="table_settings">
+            <widget class="MyTableView" name="table_settings">
              <property name="enabled">
               <bool>true</bool>
              </property>
@@ -890,6 +890,11 @@
   <customwidget>
    <class>MyLineEdit</class>
    <extends>QLineEdit</extends>
+   <header>app</header>
+  </customwidget>
+  <customwidget>
+   <class>MyTableView</class>
+   <extends>QTableView</extends>
    <header>app</header>
   </customwidget>
  </customwidgets>
