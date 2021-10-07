@@ -1,6 +1,6 @@
 from math import ceil, floor
 from PyQt5.QtCore import (Qt, QSortFilterProxyModel, pyqtSignal, pyqtSlot, 
-QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication, QEvent)
+QThread, QModelIndex, QAbstractTableModel, QVariant, QCoreApplication, QEvent, QPoint)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -141,15 +141,19 @@ class MyLineEdit(QLineEdit):
         QLineEdit.keyPressEvent(self, event)
         
 class MyTableView(QTableView):
-    scrolled = pyqtSignal()
+    
+    enter_pressed = pyqtSignal(int)
     
     def __init__(self, *args, **kwargs):
-        super(MyTableView, self).__init__(*args, **kwargs) #call to superclass 
+        super(MyTableView, self).__init__(*args, **kwargs) #call to superclass        
+    
+    @pyqtSlot(QKeyEvent)
+    def keyPressEvent(self, event):
+        QTableView.keyPressEvent(self, event)
+        if event.key() == Qt.Key_Return:
+            row = self.currentIndex().row()
+            self.enter_pressed.emit(row)
         
-    @pyqtSlot(QEvent)
-    def wheelEvent(self, event):
-        self.scrolled.emit()
-        return QTableView.wheelEvent(self, event)
         
 class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
@@ -163,6 +167,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.dep_log_table.horizontalHeader().setStretchLastSection(True)
         self.table_settings.setEditTriggers(QAbstractItemView.CurrentChanged)
         self.table_settings_opt.setEditTriggers(QAbstractItemView.CurrentChanged)
+        self.table_settings.enter_pressed.connect(self.select_enter)
         self.DepositionButton.clicked.connect(self.deposition)
         self.cancel_dep_button.clicked.connect(self.deposition_stop)
         self.update_model_Button.clicked.connect(self.update_model)
@@ -211,13 +216,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.tolerance_edit.editingFinished.connect(self.set_settings)
         self.sub_res_edit.editingFinished.connect(self.set_settings)
         
-    @pyqtSlot()
-    def _set_tab_settings_skrolled(self):
-        self._tab_settings_skrolled = True
-        
-    @pyqtSlot()
-    def _set_tab_settings_not_skrolled(self):
-        self._tab_settings_skrolled = False
     
     @pyqtSlot()    
     def disable_return_shortcut(self):
@@ -260,7 +258,25 @@ class App(QMainWindow, design.Ui_MainWindow):
         
     @pyqtSlot(int)
     def select(self, row): #fix one strange problem
-        if not self._tab_settings_skrolled:
+        height = 0
+        x = self.table_settings.viewport().rect().x()
+        rows = []
+        while height < self.table_settings.viewport().rect().height():
+          rows.append(self.table_settings.indexAt(QPoint(x,height)).row())
+          height += 20
+        if row in rows: 
+            selection = self.table_settings.model().index(row, self.settings.index_name)
+            self.table_settings.setCurrentIndex(selection)
+            
+    @pyqtSlot(int)
+    def select_enter(self, row): #fix one strange problem
+        height = 0
+        x = self.table_settings.viewport().rect().x()
+        rows = []
+        while height < self.table_settings.viewport().rect().height():
+          rows.append(self.table_settings.indexAt(QPoint(x,height)).row())
+          height += 20
+        if not row in rows: 
             selection = self.table_settings.model().index(row, self.settings.index_name)
             self.table_settings.setCurrentIndex(selection)
             
@@ -341,9 +357,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.settings.noupd_signal.connect(self.select) #fix one strange problem
         self.settings.editing.connect(self.disable_return_shortcut)
         self.settings.editingFinished.connect(self.enable_return_shortcut)
-        self._tab_settings_skrolled = False
-        self.table_settings.scrolled.connect(self._set_tab_settings_skrolled)
-        self.settings.editing.connect(self._set_tab_settings_not_skrolled)
         return True
         
     @pyqtSlot()
