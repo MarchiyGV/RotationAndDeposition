@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QLineEdit
 )
-from PyQt5.QtGui import QKeySequence, QFocusEvent, QKeyEvent
+from PyQt5.QtGui import QKeySequence, QFocusEvent, QKeyEvent, QCursor
 import matplotlib
 import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -29,6 +29,18 @@ from settings import *
 
 def round_to_1(x):
    return round(x, -int(floor(log10(abs(x)))))
+
+def waiting_effects(function):
+    def new_function(self):
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        res = False
+        try:
+            return function(self)
+        except Exception as e:
+            self.error(f'{type(e).__name__}: {str(e)}')
+        finally:
+            QApplication.restoreOverrideCursor()
+    return new_function
 
 #pyuic5 "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition\gui.ui" -o "C:\Users\Георгий\Desktop\ФТИ\RotationAndDeposition/design.py"
 font = {'family' : 'normal',
@@ -422,7 +434,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.errorbox.setText(msg)
         self.errorbox.exec_()
     
-    @pyqtSlot()    
+    @pyqtSlot()  
+    @waiting_effects 
     def update_model(self):
         self.model_info.setText('')
         settings = self.settings.wrap()
