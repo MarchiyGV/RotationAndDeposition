@@ -568,7 +568,7 @@ class Worker_single(QObject):
             if k>=n:
                 self.msg_signal.emit('Погрешность может быть недооценена из-за слишком грубой дискретизации профиля напыления')
             #if self.verbose:
-                #self.msg_signal.emit(f'i: {k} from {n}')
+            self.msg_signal.emit(f'i: {k} from {n}')
             hs.append(res[0])
             self.progress_signal.emit()
         hs = np.array(hs)/(2*pi*self.omega)
