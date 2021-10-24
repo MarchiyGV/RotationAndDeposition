@@ -346,18 +346,20 @@ class Model(QObject):
         try:
             with open(fname, 'r') as f:
                 line = list(f)[0]
-                M, N, I_tot, s = re.split(r'\t', line)
-                assert s == 'Number of particles\n'
+                
+                #M, N, I_tot, s = re.split(r'\t', line)
+                M, N, I_tot = re.findall(r'\d+', line)[:3]
                 M, N, I_tot = int(M), int(N), int(I_tot)
         except FileNotFoundError: 
             success = False
             error(f"Файл {fname} не найден")
         except: 
             success = False
-            error("Неверный формат файла с результатами расчёта SIMTRA")
+            error(f"Неверный формат файла с результатами расчёта SIMTRA:\n{M, N, I_tot}")
         else:
             self.init_deposition_mesh(M=M, N=N)
-            RELdeposition_coords_map_z = rot90(loadtxt(fname, skiprows=1)) #np.rot90
+            with open(fname, 'r') as f:
+                RELdeposition_coords_map_z = rot90(loadtxt(f, skiprows=1)) #np.rot90
             if RELdeposition_coords_map_z.shape != (M, N):
                 success = False
                 m, n = RELdeposition_coords_map_z.shape
@@ -406,6 +408,7 @@ class Model(QObject):
 class Deposition(QThread):
     progress_signal = pyqtSignal(float)
     msg_signal = pyqtSignal(str)
+    debug_signal = pyqtSignal(str)
     
     def __init__(self, rho, alpha, F, dep_dr, njobs=1, parent=None):
         super().__init__(parent)
@@ -418,6 +421,7 @@ class Deposition(QThread):
             self.workers = [Worker_single(F, rho, alpha, dep_dr)]
             self.workers[0].progress_signal.connect(self.progress)
             self.workers[0].msg_signal.connect(self.msg)
+            self.workers[0].debug_signal.connect(self.debug)
         else:
             rho_p = []
             alpha_p = []
@@ -450,6 +454,10 @@ class Deposition(QThread):
     @pyqtSlot(str)    
     def msg(self, s):
         self.msg_signal.emit(s) 
+        
+    @pyqtSlot(str)    
+    def debug(self, s):
+        self.debug_signal.emit(s) 
             
     def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, cores):
          self.R = R
@@ -527,6 +535,7 @@ class Worker:
 class Worker_single(QObject):
     progress_signal = pyqtSignal()
     msg_signal = pyqtSignal(str)
+    debug_signal = pyqtSignal(str)
     
     def __init__(self, F, rho, alpha, dep_dr, parent=None):
         super().__init__(parent)
@@ -567,8 +576,7 @@ class Worker_single(QObject):
             k = res[2]['last']    
             if k>=n:
                 self.msg_signal.emit('Погрешность может быть недооценена из-за слишком грубой дискретизации профиля напыления')
-            #if self.verbose:
-            self.msg_signal.emit(f'i: {k} from {n}')
+            self.debug_signal.emit(f'Point {i}: {k} subintervals from {n}')
             hs.append(res[0])
             self.progress_signal.emit()
         hs = np.array(hs)/(2*pi*self.omega)

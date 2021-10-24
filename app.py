@@ -166,6 +166,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.p_dep_bar.setValue(0)
         self.InputWidget.currentChanged.connect(self.tabChanged)
         self.meshBox.stateChanged.connect(self.plot_mesh)
+        self.debugBox.stateChanged.connect(self.debug_status_changed)
         self.tolerance_edit.focused.connect(self.disable_return_shortcut)
         self.tolerance_edit.unfocused.connect(self.enable_return_shortcut)
         self.sub_res_edit.focused.connect(self.disable_return_shortcut)
@@ -447,6 +448,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model.deposition.finished.connect(self.deposition_plot)
         self.model.deposition.progress_signal.connect(self.deposition_progress)
         self.model.deposition.msg_signal.connect(self.deposition_logout)
+        if self.debugBox.checkState() == 2:
+            self.model.deposition.debug_signal.connect(self.deposition_debug)
         if self.model.success:
             self.disable_model(False)
         else:
@@ -641,6 +644,19 @@ class App(QMainWindow, design.Ui_MainWindow):
             self.dep_msg.append(s)
             s = s.replace('\n', '').replace('  ', ' ').replace('  ', ' ')
             self.deposition_output.append(s+'\n')
+            
+    @pyqtSlot(int)
+    def debug_status_changed(self, state):
+        if state == 2:
+            self.model.deposition.debug_signal.connect(self.deposition_debug)
+        elif state == 0:
+            self.model.deposition.debug_signal.disconnect()
+        
+    
+    @pyqtSlot(str)
+    def deposition_debug(self, s):
+        s = s.replace('\n', '').replace('  ', ' ').replace('  ', ' ')
+        self.deposition_output.append(s+'\n')
         
     @pyqtSlot()    
     def deposition_plot(self):

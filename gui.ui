@@ -40,7 +40,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="Model">
        <attribute name="title">
@@ -746,10 +746,23 @@
                   </widget>
                  </item>
                  <item>
-                  <widget class="QCheckBox" name="meshBox">
-                   <property name="text">
-                    <string>Отображать сетку</string>
-                   </property>
+                  <widget class="QWidget" name="widget_12" native="true">
+                   <layout class="QHBoxLayout" name="horizontalLayout_3">
+                    <item>
+                     <widget class="QCheckBox" name="meshBox">
+                      <property name="text">
+                       <string>Отображать сетку</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QCheckBox" name="debugBox">
+                      <property name="text">
+                       <string>Подробный лог</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
                   </widget>
                  </item>
                 </layout>

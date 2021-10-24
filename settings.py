@@ -38,12 +38,13 @@ class Settings(QAbstractTableModel):
         self.data = array(data, dtype=object)
         for i in range(self.data.shape[0]):
             if self.data[i,self.index_type] == 'bool':
-                    if self.data[i, self.index_value] == 'True':
-                        self.data[i, self.index_value] = True
-                    elif self.data[i, self.index_value] == 'False':
-                        self.data[i, self.index_value] = False
-                    else: 
-                        print('error with type bool')
+                val = self.data[i, self.index_value]
+                if val == 'True' or val == 1:
+                    self.data[i, self.index_value] = True
+                elif val == 'False' or val == 0:
+                    self.data[i, self.index_value] = False
+                else: 
+                    print(f'error with type bool: {self.data[i, self.index_value]}')
             for j in range(self.data.shape[1]):
                 if self.data[i,j] is nan:
                     self.data[i,j] = ''
@@ -286,13 +287,13 @@ class BrowseEdit(QLineEdit):
         if not self.fname: return
         self.fname = self.fname.replace('/', os.sep)
         self.setText(self.fname)
+        self.delegate.commitData.emit(self)
         
 
         
 class OpenFileDelegate(QStyledItemDelegate):
     def __init__(self, wiget):
         super().__init__(wiget)
-        self.fname = ''
         self.wiget = wiget
         
     def createEditor(self, parent, option, index):
@@ -310,4 +311,8 @@ class OpenFileDelegate(QStyledItemDelegate):
        
     @pyqtSlot()
     def openFile(self):
+        self.commitData.emit(self.sender())
+        
+    @pyqtSlot()
+    def currentIndexChanged(self):
         self.commitData.emit(self.sender())
