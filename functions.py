@@ -130,7 +130,6 @@ class Model(QObject):
             k_min = 1
             k_max = 1
         if R_min_self>R_max_self:
-            print(R_min_self, R_max_self, cos(arcsin(substrate_y_len/2/holder_outer_radius)))
             r = (holder_outer_radius-holder_inner_radius)/2
             if rotation_type == 'Solar':
                 r_ = holder_inner_radius
@@ -215,7 +214,7 @@ class Model(QObject):
                     error('Для новой папки произошла таже ошибка')
                     self.success = False
                     return False
-        else: print('WARNING: memory has not cleared, changes in the code or settings may be ignored')
+        else: error('WARNING: memory has not cleared, changes in the code or settings may be ignored')
         
         ang=arange(0, 2*pi,0.01) #np.aarange
         self.holder_circle_inner_x=holder_inner_radius*cos(ang) #np.cos

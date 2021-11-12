@@ -803,7 +803,6 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.cancelOptimiseButton.setDisabled(True)
         
 def main():
-    print('app = main')
     app = QApplication(sys.argv)  
     window = App() 
     window.show()  # Показываем окно

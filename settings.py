@@ -43,8 +43,6 @@ class Settings(QAbstractTableModel):
                     self.data[i, self.index_value] = True
                 elif val == 'False' or val == 0:
                     self.data[i, self.index_value] = False
-                else: 
-                    print(f'error with type bool: {self.data[i, self.index_value]}')
             for j in range(self.data.shape[1]):
                 if self.data[i,j] is nan:
                     self.data[i,j] = ''
@@ -199,7 +197,6 @@ class Settings(QAbstractTableModel):
             else: 
                 flag = False
         else:
-            print(f'incorrect value {value} ({type(value)})')
             flag = False
         return value, flag 
     
@@ -221,8 +218,6 @@ class YesNoDelegate(QStyledItemDelegate):
             i = 0
         elif index.model().data(index) == 'False':
             i = 1
-        else:
-            print(f'err: {index.model().data(index)}, {type(index.model().data(index))}')
         editor.setCurrentIndex(i)
         editor.blockSignals(False)
         

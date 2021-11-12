@@ -22,24 +22,23 @@ class CustomTakeStep:
        k_2 = self.k_max_step
        NR_1 = self.NR_min_step
        NR_2 = self.NR_max_step
-       print('R = %.1f, k = %.2f, NR = %.2f' % tuple(x))
        while True:
            d = numpy.random.uniform(R_1, R_2)*numpy.random.choice([1,-1])
            if d+x[0]>=self.R_bounds[0] and d+x[0]<self.R_bounds[1]:
                x[0] += d
-               print('MC switch: dR = %.1f' % d)
+               #print('MC switch: dR = %.1f' % d)
                while True:
                    d = numpy.random.uniform(k_1, k_2)*numpy.random.choice([1,-1])
                    if d+x[1]>=self.k_bounds[0] and d+x[1]<self.k_bounds[1]:
                        x[1] += d
-                       print('MC switch: dk = %.2f' % d)
+                       #print('MC switch: dk = %.2f' % d)
                        while True:
                            d = numpy.random.uniform(NR_1, NR_2)*numpy.random.choice([1,-1])
                            if d+x[2]>=self.NR_bounds[0] and d+x[2]<self.NR_bounds[1]:
                                x[2] += d
-                               print('MC switch: dNR = %.2f' % d)
+                               #print('MC switch: dNR = %.2f' % d)
                                break
-                       print('new: R = %.1f, k = %.2f, NR = %.2f' % tuple(x))
+                       #print('new: R = %.1f, k = %.2f, NR = %.2f' % tuple(x))
                        break
                break
        return x
@@ -284,19 +283,19 @@ def minimize_custom_neldermead(func, x0, args=(), callback=None,
         warnflag = 1
         msg = _status_message['maxfev']
         if disp:
-            print('Warning: ' + msg)
+            #print('Warning: ' + msg)
     elif iterations >= maxiter:
         warnflag = 2
         msg = _status_message['maxiter']
         if disp:
-            print('Warning: ' + msg)
+            #print('Warning: ' + msg)
     else:
         msg = _status_message['success']
         if disp:
-            print(msg)
-            print("         Current function value: %f" % fval)
-            print("         Iterations: %d" % iterations)
-            print("         Function evaluations: %d" % fcalls[0])
+            #print(msg)
+            #print("         Current function value: %f" % fval)
+            #print("         Iterations: %d" % iterations)
+            #print("         Function evaluations: %d" % fcalls[0])
 
     result = sp_opt.OptimizeResult(fun=fval, nit=iterations, nfev=fcalls[0],
                             status=warnflag, success=(warnflag == 0),
