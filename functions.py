@@ -2,6 +2,7 @@ from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
     linspace, meshgrid, arctan2, rot90, transpose, loadtxt, log10, arcsin
     )
+from numpy import matlib
 import numpy as np
 from multiprocessing import Pool
 from scipy.interpolate import interp1d, RegularGridInterpolator
@@ -395,7 +396,7 @@ class Model(QObject):
             norm = Z.max()
             Z = self.C*Z/Z.max()
             assert Z.max()<=self.C
-            interp = interp_axial(self.magnetron_x, self.magnetron_x, norm, f, self.C)
+            interp = interp_axial(self.magnetron_x, self.magnetron_y, norm, f, self.C)
             self.deposition_coords_map_z = Z
             self.F = interp.F
             self.F_axial = True
@@ -404,6 +405,23 @@ class Model(QObject):
 
     def heterogeneity(self, I):
         return (1-I.min()/I.max())*100
+    
+    def profile_info(self):
+        x0 = np.linspace(0, self.holder_outer_radius)
+        y0 = np.zeros_like(x0)
+        h0 = np.zeros_like(x0)
+        N = 360
+        ang = np.linspace(0, 2*pi, num=N)
+        da = ang[1]-ang[0]
+        for a in ang: 
+            x = x0*np.cos(a)+y0*np.sin(a)
+            y = -x0*np.sin(a)+y0*np.cos(a)
+            h0 += self.F((x,y))/da
+        h = matlib.repmat(h0, N, 1)
+        r = np.linspace(0, self.holder_outer_radius)
+        a = np.linspace(0, 2*pi, num=N)
+        x, y = pol2cart(*np.meshgrid(r,a))
+        return x0, y0, h0, x, y, h
     
 class Deposition(QThread):
     progress_signal = pyqtSignal(float)

@@ -16,6 +16,7 @@ import matplotlib
 import matplotlib.ticker as ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 from numpy import (array, multiply, log10, mean, min)
 import os
 from multiprocessing import freeze_support
@@ -132,6 +133,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.update_model_Button.clicked.connect(self.update_model)
         self.save_settings_Button.clicked.connect(self.save_settings)
         self.open_settings_Button.clicked.connect(self.open_settings)
+        self.profile_Button.clicked.connect(self.profile_info)
         self.shortcut_deposite = QShortcut('Return', self.Deposition)
         self.shortcut_update = QShortcut('Return', self.Model)
         self.shortcut_deposite.activated.connect(self.DepositionButton.clicked.emit)
@@ -614,7 +616,26 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.geometry_cbar.set_label('nm/min')
         self.geometry_vl.canvas.figure.tight_layout()
         self.geometry_vl.canvas.draw()
-    
+        
+    @pyqtSlot()
+    def profile_info(self):
+        x0, y0, h0, x, y, h = self.model.profile_info()
+        h0 = 100*h0/h0.max()
+        h = 100*h/h.max()
+        ax = plt.subplot(121)
+        im = ax.contourf(x, y, h)
+        ax.set_xlabel('$x, mm$')
+        ax.set_ylabel('$y, mm$')
+        ax.set_title('Single rotation')
+        clb=ax.figure.colorbar(im, ax=ax)
+        clb.ax.set_title('$h, \\%$')
+        ax = plt.subplot(122)
+        ax.plot(x0, h0)
+        ax.set_xlabel('$r, mm$')
+        ax.set_ylabel('$h, %$')
+        ax.set_title('Cross section')
+        plt.show()
+        
     @pyqtSlot()
     def deposition(self):
         self.deposition_output.setText('')
