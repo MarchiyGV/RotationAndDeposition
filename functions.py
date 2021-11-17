@@ -66,8 +66,11 @@ class interp_axial:
 class Model(QObject):
     
     warn_signal = pyqtSignal(str,str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
     
-    def __init__(self,
+    def update(self,
                  fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
                  magnetron_y, substrate_shape, substrate_radius, 
                  substrate_x_len, substrate_y_len, substrate_res, cores, 
@@ -77,10 +80,9 @@ class Model(QObject):
                  k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
                  NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
                  minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
-                 R_min_step, k_min_step, NR_min_step, mc_iter, T, parent = None):
+                 R_min_step, k_min_step, NR_min_step, mc_iter, T):
         
-        super().__init__(parent)
-        self.errorbox = QtWidgets.QErrorMessage()
+        
         self.memory = Memory('cache', verbose=0)
         self.count = 0
         self.rotation_type = rotation_type
@@ -372,7 +374,7 @@ class Model(QObject):
             msg = 'Согласно резудьтатам расчёта SIMTRA:\n {} % потока осаждено на заданную поверхность'.format(round(100*RELdeposition_coords_map_z.sum()/I_tot))
             type = 'simtra'
             self.warn_signal.emit(msg, type)
-            message(msg)
+            #message(msg)
             row_dep = RELdeposition_coords_map_z.max()
             self.deposition_coords_map_z = self.C*(RELdeposition_coords_map_z/row_dep)
             success = True
