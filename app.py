@@ -26,6 +26,7 @@ import design
 import functions 
 from global_parameters import *
 from settings import *
+from tool_profile import *
 
 def round_to_1(x):
    return round(x, -int(floor(log10(abs(x)))))
@@ -119,6 +120,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self) 
+        self.childs = []
         self.warnbox = QErrorMessage(self)
         self.errorbox = QMessageBox(self)
         self.deposition_log = Dep_log()
@@ -622,19 +624,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         x0, y0, h0, x, y, h = self.model.profile_info()
         h0 = 100*h0/h0.max()
         h = 100*h/h.max()
-        ax = plt.subplot(121)
-        im = ax.contourf(x, y, h)
-        ax.set_xlabel('$x, mm$')
-        ax.set_ylabel('$y, mm$')
-        ax.set_title('Single rotation')
-        clb=ax.figure.colorbar(im, ax=ax)
-        clb.ax.set_title('$h, \\%$')
-        ax = plt.subplot(122)
-        ax.plot(x0, h0)
-        ax.set_xlabel('$r, mm$')
-        ax.set_ylabel('$h, %$')
-        ax.set_title('Cross section')
-        plt.show()
+        profile_app = Profile_app(self, x0, y0, h0, x, y, h)
+        self.childs.append(profile_app)
+        profile_app.show()
         
     @pyqtSlot()
     def deposition(self):
@@ -649,6 +641,12 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.model.deposition.task(*args)
         self.p_dep_bar.setValue(0)
         self.model.deposition.start()
+        
+    def closeEvent(self, event):
+        event.accept()
+        for window in self.childs:
+            window.close()
+        QMainWindow.closeEvent(self, event)
         
     @pyqtSlot()
     def deposition_stop(self):
