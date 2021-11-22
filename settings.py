@@ -277,7 +277,11 @@ class BrowseEdit(QLineEdit):
     @pyqtSlot()
     def on_btnaction(self):
         self.delegate.blockSignals(True)
-        self.fname = QFileDialog.getOpenFileName(self.parent(), 'Open file', os.getcwd())[0]
+        if self.delegate.path == '':
+            path = os.getcwd()
+        else:
+            path = self.delegate.path
+        self.fname = QFileDialog.getOpenFileName(self.parent(), 'Open file', path)[0]
         self.delegate.blockSignals(False)
         if not self.fname: return
         self.fname = self.fname.replace('/', os.sep)
@@ -287,9 +291,10 @@ class BrowseEdit(QLineEdit):
 
         
 class OpenFileDelegate(QStyledItemDelegate):
-    def __init__(self, wiget):
+    def __init__(self, wiget, last_path):
         super().__init__(wiget)
         self.wiget = wiget
+        self.path = last_path
         
     def createEditor(self, parent, option, index):
         editor = BrowseEdit(parent=parent)
@@ -302,7 +307,9 @@ class OpenFileDelegate(QStyledItemDelegate):
         editor.blockSignals(False)
         
     def setModelData(self, editor, model, index):
-        model.setData(index, editor.text())
+        text = editor.text()
+        self.path = os.path.dirname(text)
+        model.setData(index, text)
        
     @pyqtSlot()
     def openFile(self):

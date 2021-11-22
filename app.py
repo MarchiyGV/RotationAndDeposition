@@ -121,6 +121,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         super().__init__()
         self.setupUi(self) 
         self.childs = []
+        self.last_path_profile = ''
         self.warnbox = QErrorMessage(self)
         self.errorbox = QMessageBox(self)
         self.deposition_log = Dep_log()
@@ -269,7 +270,7 @@ class App(QMainWindow, design.Ui_MainWindow):
             if type_ == 'bool':
                 table_view.setItemDelegateForRow(i, YesNoDelegate(table_view))
             if type_ == 'filename':
-                table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view))
+                table_view.setItemDelegateForRow(i, OpenFileDelegate(table_view, self.last_path_profile))
                 
     @pyqtSlot(int)
     def update_settings_dependansies(self, row=0):
