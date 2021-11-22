@@ -118,39 +118,6 @@
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QWidget" name="widget_13" native="true">
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>0</height>
-              </size>
-             </property>
-             <layout class="QGridLayout" name="gridLayout_3">
-              <item row="0" column="0">
-               <widget class="QPushButton" name="save_settings_Button">
-                <property name="text">
-                 <string>Сохранить настройки</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="1">
-               <widget class="QPushButton" name="open_settings_Button">
-                <property name="text">
-                 <string>Загрузить настройки</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="2">
-               <widget class="QPushButton" name="profile_Button">
-                <property name="text">
-                 <string>Исследовать профиль</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </widget>
-           </item>
           </layout>
          </widget>
         </item>
@@ -376,7 +343,7 @@
                      </rect>
                     </property>
                     <property name="text">
-                     <string>nm</string>
+                     <string>нм</string>
                     </property>
                    </widget>
                   </widget>
@@ -903,6 +870,21 @@
      <height>31</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>Файл</string>
+    </property>
+    <addaction name="save_settings_Button"/>
+    <addaction name="open_settings_Button"/>
+   </widget>
+   <widget class="QMenu" name="menu_2">
+    <property name="title">
+     <string>Инструменты</string>
+    </property>
+    <addaction name="profile_Button"/>
+   </widget>
+   <addaction name="menu"/>
+   <addaction name="menu_2"/>
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="enabled">
@@ -915,6 +897,21 @@
    </property>
    <property name="shortcut">
     <string>Return</string>
+   </property>
+  </action>
+  <action name="save_settings_Button">
+   <property name="text">
+    <string>Сохранить модель</string>
+   </property>
+  </action>
+  <action name="open_settings_Button">
+   <property name="text">
+    <string>Загрузить модель</string>
+   </property>
+  </action>
+  <action name="profile_Button">
+   <property name="text">
+    <string>Исследование профиля напыления</string>
    </property>
   </action>
  </widget>

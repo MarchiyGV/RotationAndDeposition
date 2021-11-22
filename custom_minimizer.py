@@ -283,15 +283,18 @@ def minimize_custom_neldermead(func, x0, args=(), callback=None,
         warnflag = 1
         msg = _status_message['maxfev']
         if disp:
+            pass
             #print('Warning: ' + msg)
     elif iterations >= maxiter:
         warnflag = 2
         msg = _status_message['maxiter']
         if disp:
+            pass
             #print('Warning: ' + msg)
     else:
         msg = _status_message['success']
         if disp:
+            pass
             #print(msg)
             #print("         Current function value: %f" % fval)
             #print("         Iterations: %d" % iterations)

@@ -131,9 +131,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.DepositionButton.clicked.connect(self.deposition)
         self.cancel_dep_button.clicked.connect(self.deposition_stop)
         self.update_model_Button.clicked.connect(self.update_model)
-        self.save_settings_Button.clicked.connect(self.save_settings)
-        self.open_settings_Button.clicked.connect(self.open_settings)
-        self.profile_Button.clicked.connect(self.profile_info)
+        self.save_settings_Button.triggered.connect(self.save_settings)
+        self.open_settings_Button.triggered.connect(self.open_settings)
+        self.profile_Button.triggered.connect(self.profile_info)
         self.shortcut_deposite = QShortcut('Return', self.Deposition)
         self.shortcut_update = QShortcut('Return', self.Model)
         self.shortcut_deposite.activated.connect(self.DepositionButton.clicked.emit)
@@ -724,8 +724,8 @@ class App(QMainWindow, design.Ui_MainWindow):
         ### plotting
         ax1f = self.geometry_vl.canvas.figure.axes[1]
         im = ax1f.tricontourf(self.model.xs, self.model.ys, I/I.max())
-        ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
-                  color='black', linewidth=7)
+        #ax1f.plot(self.model.substrate_rect_x, self.model.substrate_rect_y, 
+        #          color='black', linewidth=7)
         if self.meshBox.isChecked():
             self.mesh.remove()
             self.mesh = ax1f.plot(self.model.xs, self.model.ys, '.', color=mesh_color)[0]
