@@ -2,6 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 import app as application
 from multiprocessing import freeze_support
+import exception_hooks
 
 def main():
     app = QApplication(sys.argv)  
