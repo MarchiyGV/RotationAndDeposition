@@ -503,9 +503,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1.set_aspect('equal')
         ax1.set_title('Сетка подложки\n')
         ax2 = self.mesh_plot_vl.canvas.figure.axes[1]
+        z = self.model.F(self.model.deposition_coords_x, self.model.deposition_coords_y, grid=True)
         im = ax2.contourf(self.model.deposition_coords_map_x, 
-                     self.model.deposition_coords_map_y, 
-                     self.model.deposition_coords_map_z, 100)
+                     self.model.deposition_coords_map_y, z, 100)
 
         ax2.plot(self.model.holder_circle_inner_x, 
                  self.model.holder_circle_inner_y, 
