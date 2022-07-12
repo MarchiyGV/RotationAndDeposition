@@ -8,7 +8,6 @@ import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline
 import time
 from scipy.integrate import quad
-from joblib import Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
@@ -79,8 +78,7 @@ class Model(QObject):
     def update(self,
                  fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
                  magnetron_y, substrate_shape, substrate_radius, 
-                 substrate_x_len, substrate_y_len, substrate_res, cores, 
-                 verbose, delete_cache, point_tolerance, 
+                 substrate_x_len, substrate_y_len, substrate_res, tolerance, 
                  holder_inner_radius, holder_outer_radius, deposition_len_x, 
                  deposition_len_y, R_step,
                  k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
@@ -89,10 +87,8 @@ class Model(QObject):
                  R_min_step, k_min_step, NR_min_step, mc_iter, T, smooth, 
                  spline_order):
         
-        
         self.smooth = smooth
         self.spline_order = spline_order
-        self.memory = Memory('cache', verbose=0)
         self.count = 0
         self.rotation_type = rotation_type
         self.fname_sim = fname_sim
@@ -117,10 +113,7 @@ class Model(QObject):
         self.substrate_res = substrate_res
         self.substrate_rows = ceil(substrate_y_len*substrate_res)
         self.substrate_columns = ceil(substrate_x_len*substrate_res)
-        self.cores = cores # number of jobs for paralleling
-        self.verbose = verbose # True: print message each time when function of deposition called
-        self.delete_cache = delete_cache
-        self.point_tolerance = point_tolerance/100 
+        self.tolerance = tolerance/100 
         self.holder_inner_radius = holder_inner_radius  
         self.holder_outer_radius = holder_outer_radius
         self.deposition_len_x = deposition_len_x 
@@ -202,28 +195,6 @@ class Model(QObject):
         self.F_axial = False
         ####GEOMETRY + INITIALIZATION####
 
-        if self.delete_cache: 
-            try:
-                self.memory.clear(warn=False)
-                try:
-                    dirpath = 'temp_cache'
-                    if os.path.exists(dirpath) and os.path.isdir(dirpath):
-                        shutil.rmtree(dirpath)
-                except PermissionError:
-                    error('Не получилось удалить "temp_cache"')
-            except PermissionError as err:
-                msg1 = 'Нет доступа к кэшу, не получилось стереть кэш:\n\n'
-                msg2 = '\n\nДля текущей модели будет создана дополнительная папка "temp_cache".\nПеред следующим сеансом рекомендуется перезапустить Python//программу'
-                error(msg1+str(err)+msg2)
-                self.memory = Memory('temp_cache', verbose=0)
-                try:
-                    self.memory.clear(warn=False)
-                except PermissionError:
-                    error('Для новой папки произошла таже ошибка')
-                    self.success = False
-                    return False
-        else: error('WARNING: memory has not cleared, changes in the code or settings may be ignored')
-        
         ang=arange(0, 2*pi,0.01) #np.aarange
         self.holder_circle_inner_x=holder_inner_radius*cos(ang) #np.cos
         self.holder_circle_inner_y=holder_inner_radius*sin(ang) #np.sin
@@ -295,14 +266,14 @@ class Model(QObject):
         else: raise TypeError(f'incorrect source {source}')
         if not self.success: 
             return None
-        if not self.F_axial:
-            self.F = RectBivariateSpline(self.deposition_coords_x, 
-                                         self.deposition_coords_y,  #scipy.interpolate.RegularGridInterpolator
-                                         self.deposition_coords_map_z,
-                                         s=self.smooth, kx=self.spline_order,
-                                         ky=self.spline_order)
-            self.F_coef = self.F.get_coeffs()
-            self.F_knots = self.F.get_knots()
+        #if not self.F_axial:
+        self.F = RectBivariateSpline(self.deposition_coords_x, 
+                                     self.deposition_coords_y,  #scipy.interpolate.RegularGridInterpolator
+                                     self.deposition_coords_map_z,
+                                     s=self.smooth, kx=self.spline_order,
+                                     ky=self.spline_order)
+        self.F_coef = self.F.get_coeffs()
+        self.F_knots = self.F.get_knots()
             
         print('calculation x bspline representation...')
         self.x_bspline_set = bspline_basis_set(self.spline_order, 
@@ -364,7 +335,8 @@ class Model(QObject):
             joblib_ignore.append('k')
         '''    
         self.time_f = []
-        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.dep_dr, self, njobs=self.cores)
+        self.deposition = Deposition(self.rho, self.alpha0, self.F,
+                                     self.dep_dr, self)
         
         self.success = True
         
@@ -608,14 +580,13 @@ class Deposition(QThread):
     def debug(self, s):
         self.debug_signal.emit(s) 
             
-    def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, cores):
+    def task(self, R, k, NR, omega, alpha0_sub, tolerance):
          self.R = R
          self.k = k
          self.NR = NR
          self.omega = omega
          self.alpha0_sub = alpha0_sub
-         self.point_tolerance = point_tolerance
-         self.cores = cores
+         self.tolerance = tolerance
          self.count = 0
          self.I_lenx = 2
          self.I_leny = 2
@@ -672,130 +643,15 @@ class Deposition(QThread):
             self.hs = np.concatenate(hs)
             '''
         """
-        
-        """
-        hs = []
-        _s = slice(self.model.spline_order, 
-                   -self.model.spline_order)
-        xs = self.model.F_knots[0][_s] 
-        ys = self.model.F_knots[1][_s]
-        dx = np.min(np.diff(xs))
-        dy = np.min(np.diff(ys))
-        n_points_per_interval = 1 #how many points should be in each alpha interval
-        tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
-        xtol = tolerance * dx
-        ytol = tolerance * dy
-        a = self.alpha0_sub
-        a1 = self.alpha0_sub + self.NR*2*pi
-        for i in self.ind:
-            print('finding edges...')
-            x, y = self.xyp(a, i)
-            breaks_x = []
-            breaks_y = []
-            ni0 = []
-            nj0 = []
-            
-            '''x'''
-            max_dxy_da = self.R+self.rho[i]*self.k # dx/da, dy/da <= R+rho*k
-            da = (dx/max_dxy_da) / n_points_per_interval
-            num = ceil((a1-a)/da)+1
-            ang = np.linspace(a, a1, num=num, endpoint=True)
-            p = self.model.dep_xi(x)
-            ni0.append(p)
-            for j, aa in enumerate(ang):
-                x, _ = self.xyp(aa, i)
-                p1 = self.model.dep_xi(x)
-                if abs(p1-p)==1:
-                    def f(a):
-                        x, _ = self.xyp(a, i)
-                        if p1>p:
-                            c = 1
-                        else:
-                            c = 0
-                        x0 = xs[p+c]
-                        return x-x0
-                    breaks_x.append(brentq(f, ang[j-1], aa, xtol=xtol))
-                    ni0.append(p1)
-                    p = p1
-                elif abs(p1-p)>1:
-                    raise ValueError('finding edges: angle step for x is too big!')
-                    
-            '''y'''
-            da = (dy/max_dxy_da) / n_points_per_interval
-            num = ceil((a1-a)/da)+1
-            ang = np.linspace(a, a1, num=num, endpoint=True)
-            q = self.model.dep_yi(y)
-            nj0.append(q)
-            for j, aa in enumerate(ang):
-                _, y = self.xyp(aa, i)
-                q1 = self.model.dep_yi(y)
-                if abs(q1-q)==1:
-                    def f(a):
-                        _, y = self.xyp(a, i)
-                        if q1>q:
-                            c = 1
-                        else:
-                            c = 0
-                        y0 = ys[q+c]
-                        return y-y0
-                    breaks_y.append(brentq(f, ang[j-1], aa, xtol=ytol))
-                    nj0.append(q1)
-                    q = q1
-                elif abs(q1-q)>1:
-                    raise ValueError('finding edges: angle step for y is too big!')
-                
-            '''combining'''
-            breaks = np.concatenate(([a], breaks_x, breaks_y))
-            ni = np.empty((breaks.shape[0]), dtype=np.int32)
-            x, y = self.xyp(a, i)
-            ni[0] = self.model.dep_xi(x)
-            nj = np.empty((breaks.shape[0]), dtype=np.int32)
-            nj[0] = self.model.dep_yi(y)
-            ind = np.argsort(breaks)
-            for ki in range(1, breaks.shape[0]):
-                if ind[ki]<1+len(breaks_x):
-                    ni[ki] = ni0[ind[ki]]#заменить на ind[ki]
-                    nj[ki] = nj[ki-1]
-                else:
-                    ni[ki] = ni[ki-1]
-                    nj[ki] = nj0[ind[ki]-len(breaks_x)]
-            #print(ni, nj, ni0, nj0)
-            breaks = np.concatenate((breaks[ind], [a1]))
-            '''
-            if i ==0:
-                import matplotlib.pyplot as plt
-                x, y = self.xyp(breaks, i)
-                _ys = ys[ys>y.min()]
-                _ys = _ys[_ys<y.max()]
-                _xs = xs[xs>x.min()]
-                _xs = _xs[_xs<x.max()]
-                plt.hlines(_ys, xmin=x.min(), xmax=x.max())
-                plt.vlines(_xs, ymin=y.min(), ymax=y.max())
-                plt.plot(x, y, 'x', color='red')
-                for j in range(len(ni)):
-                    plt.text(xs[ni[j]], ys[nj[j]], f'{ni[j]}, {nj[j]}')
-                plt.savefig('path.png')
-                plt.show()
-            '''
-                    
-            print('done')
-            
-            print('integration...')
-            x_sym, y_sym = self.xy_sym(i)
-            I = np.zeros((len(ni)))
-            for j in range(I.shape[0]):
-                I[j] = self.integrate(self.model.F_matrix[ni[j], nj[j]], x_sym, y_sym, breaks[j], breaks[j+1])
-            print('done')
-            hs.append(np.sum(np.sort(I)))
-        temp = self.hs
-        """
+
         _s = slice(self.model.spline_order, 
                    -self.model.spline_order)
         xs = self.model.F_knots[0][_s] 
         ys = self.model.F_knots[1][_s]
         #temp = self.hs
         hs = self.do(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
-                     len(self.ind), self.rho, self.alpha, self.model.F_matrix)
+                     len(self.ind), self.rho, self.alpha, self.model.F_matrix,
+                     self.tolerance)
         self.hs = np.array(hs)/(2*pi*self.omega)
         #print('relative error:', np.max(np.abs((self.hs-temp)/temp)))
         t = time.time()-t0
@@ -804,12 +660,13 @@ class Deposition(QThread):
     
     @staticmethod
     @njit(parallel=True, cache=True)
-    def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix):
+    def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix, 
+           tolerance):
         hs = np.zeros((max_ind))
         dx = np.min(np.diff(xs))
         dy = np.min(np.diff(ys))
         n_points_per_interval = 3 #how many points should be in each alpha interval
-        tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
+        #tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
         xtol = tolerance * dx
         ytol = tolerance * dy
         a = alpha0_sub
@@ -963,6 +820,7 @@ class Deposition(QThread):
             _mask[i] = 1
             hs += _mask*(np.sum(np.sort(I)))
         return hs
+    
 @njit(cache=True)
 def Iij(i, j, x_matrix, y_matrix, ang0, ang1):
     if j == 0:
