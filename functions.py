@@ -8,7 +8,6 @@ import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline
 import time
 from scipy.integrate import quad
-from scipy.optimize import brentq
 from joblib import Memory
 from math import ceil
 import custom_minimizer 
@@ -22,6 +21,8 @@ import os
 import shutil
 from bsplines import bspline_basis_set
 from numba import njit, prange
+#from functools import lru_cache
+#from numpy_lru_cache_decorator import np_cache
 #import dill
 ''' 
 Functions and methods
@@ -315,57 +316,29 @@ class Model(QObject):
         n = len(self.F_knots[0])-(self.spline_order+1)
         m = len(self.F_knots[1])-(self.spline_order+1)
         k = self.spline_order+1
-        self.F_matrix = np.zeros((n, m, k, k))
+        
+        t0 = time.time()
+        ai0 = np.zeros((len(self.x_bspline_set))).astype(np.int64)
+        bi0 = np.zeros((len(self.x_bspline_set))).astype(np.int64)
+        N_matrix = np.zeros((len(self.x_bspline_set), k, k))
         for i in range(len(self.x_bspline_set)):
             N = self.x_bspline_set[i]
-            N_matrix = np.zeros((k, k))
-            l = len(N)
-            coeffs = np.zeros((l, k))
-            ai = np.zeros((l), dtype=np.int32)
-            bi = np.zeros((l), dtype=np.int32)
-            t = 0
-            for nn in N:
-                coeffs[t, :(len(nn)-2)] = nn[2:]
-                ai[t] = self.dep_xi(nn[0])
-                bi[t] = self.dep_xi(nn[1])
-                t+=1
+            bounds = self.F_knots[0][self.spline_order:-self.spline_order]
+            ai0[i], bi0[i], N_matrix[i] = self.convert_bspline_to_poly(N, bounds)
+            
+        aj0 = np.zeros((len(self.y_bspline_set))).astype(np.int64)
+        bj0 = np.zeros((len(self.y_bspline_set))).astype(np.int64)
+        M_matrix = np.zeros((len(self.y_bspline_set), k, k))    
+        for j in range(len(self.y_bspline_set)):
+            M = self.y_bspline_set[j]
+            bounds = self.F_knots[1][self.spline_order:-self.spline_order]
+            aj0[j], bj0[j], M_matrix[j] = self.convert_bspline_to_poly(M, bounds)
+        
+        self.F_matrix = self.calc_F_matrix(n, m, k, N_matrix, M_matrix, 
+                                           ai0, bi0, aj0, bj0, self.F_coef)
 
-            ai0 = ai.min()
-            ai = ai-ai0
-            bi0 = bi.max()
-            bi = bi-ai0
-            for q in range(t):
-                for ki in range(ai[q], bi[q]):
-                    N_matrix[ki, :coeffs.shape[1]] += coeffs[q, :]
-
-            for j in range(len(self.y_bspline_set)):
-                M = self.y_bspline_set[j]
-                M_matrix = np.zeros((k, k))
-                s = len(M)
-                coeffs = np.zeros((s, k))
-                aj = np.zeros((s), dtype=np.int32)
-                bj = np.zeros((s), dtype=np.int32)
-                t = 0
-                for mm in M:
-                    coeffs[t, :(len(mm)-2)] = mm[2:]
-                    aj[t] = self.dep_yi(mm[0])
-                    bj[t] = self.dep_yi(mm[1])
-                    t+=1
-                    
-                aj0 = aj.min()
-                aj = aj-aj0
-                bj0 = bj.max()
-                bj = bj-aj0
-                for q in range(t):
-                    for ki in range(aj[q], bj[q]):
-                        M_matrix[ki, :coeffs.shape[1]] += coeffs[q, :]
-
-                NM = np.zeros((bi0-ai0, bj0-aj0, k, k))
-                for ki in range(NM.shape[0]):
-                    for kj in range(NM.shape[1]):
-                        NM[ki, kj] = self.F_coef[i*m+j]*np.tensordot(N_matrix[ki], M_matrix[kj], axes=0)
-                self.F_matrix[ai0:bi0, aj0:bj0] += NM
-        print('done')
+        t = time.time()-t0
+        print(f'done: {t} s')
 
         n = len(self.deposition_coords_x)
         m = len(self.deposition_coords_y)
@@ -378,23 +351,6 @@ class Model(QObject):
                 y = self.deposition_coords_y[j]
                 z[i, j] = self.F_spline(x, y)
         self.matrix_err = np.max(np.abs(z-z0))
-        '''
-        from matplotlib import pyplot as plt
-        plt.contourf(self.deposition_coords_map_x, 
-                     self.deposition_coords_map_y, z, 100)
-        plt.hlines(self.deposition_coords_y, self.deposition_coords_x.min(),
-                   self.deposition_coords_x.max())
-        plt.vlines(self.deposition_coords_x, self.deposition_coords_y.min(),
-                   self.deposition_coords_y.max())
-        plt.colorbar()
-        plt.show()
-        #print(self.F_knots[0])
-        #print(self.F_knots[1])
-        print(len(self.F_knots[0]), len(self.F_knots[1]))
-        print(len(self.F_coef), self.F_matrix.shape[0]*self.F_matrix.shape[1])
-        print(self.F_matrix.shape)
-        print(self.F_coef[-1])
-        '''
         print('spline dimension:', len(self.F_coef))
         print('pline matrix shape:', self.F_matrix.shape)
         print('matrix error:', self.matrix_err)
@@ -412,6 +368,48 @@ class Model(QObject):
         
         self.success = True
         
+    @staticmethod
+    @njit
+    def calc_F_matrix(n, m, k, N, M, ai0, bi0, aj0, bj0, F_coeff):
+        F_matrix = np.zeros((n, m, k, k))
+        for i in range(N.shape[0]):
+            for j in range(M.shape[0]):
+                NM = np.zeros((bi0[i]-ai0[i], bj0[j]-aj0[j], k, k))
+                for ki in range(NM.shape[0]):
+                    for kj in range(NM.shape[1]):
+                        for ni in range(NM.shape[2]):
+                            for nj in range(NM.shape[3]):
+                                val = F_coeff[i*m+j]*N[i, ki, ni]*M[j, kj, nj]
+                                NM[ki, kj, ni, nj] = val
+                F_matrix[ai0[i]:bi0[i], aj0[j]:bj0[j]] += NM
+        return F_matrix
+    
+    @staticmethod
+    @njit
+    def convert_bspline_to_poly(N, bounds):
+        k = N.shape[1]-2
+        N_matrix = np.zeros((k, k))
+        l = N.shape[0]
+        coeffs = np.zeros((l, k))
+        ai = np.zeros((l)).astype(np.int64)
+        bi = np.zeros((l)).astype(np.int64)
+        t = 0
+        for nn in N:
+            coeffs[t, :(len(nn)-2)] = nn[2:]
+            ai[t] = np.sum(bounds<=nn[0])-1
+            bi[t] = np.sum(bounds<=nn[1])-1
+            t+=1
+
+        ai0 = ai.min()
+        ai = ai-ai0
+        bi0 = bi.max()
+        bi = bi-ai0
+        for q in range(t):
+            for ki in range(ai[q], bi[q]):
+                N_matrix[ki, :coeffs.shape[1]] += coeffs[q, :]
+                
+        return ai0, bi0, N_matrix      
+            
     def F_spline(self, x, y):
         z = 0
         if x == self.deposition_coords_x[-1]:

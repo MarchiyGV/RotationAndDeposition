@@ -21,7 +21,7 @@ from numpy import (array, multiply, log10, mean, min)
 import os
 from multiprocessing import freeze_support
 
-import exception_hooks
+
 import design
 import functions 
 from global_parameters import *
