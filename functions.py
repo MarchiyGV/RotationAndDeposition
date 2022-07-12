@@ -369,7 +369,7 @@ class Model(QObject):
         self.success = True
         
     @staticmethod
-    @njit
+    @njit(cache=True)
     def calc_F_matrix(n, m, k, N, M, ai0, bi0, aj0, bj0, F_coeff):
         F_matrix = np.zeros((n, m, k, k))
         for i in range(N.shape[0]):
@@ -385,7 +385,7 @@ class Model(QObject):
         return F_matrix
     
     @staticmethod
-    @njit
+    @njit(cache=True)
     def convert_bspline_to_poly(N, bounds):
         k = N.shape[1]-2
         N_matrix = np.zeros((k, k))
@@ -803,7 +803,7 @@ class Deposition(QThread):
         return
     
     @staticmethod
-    @njit(parallel=False)
+    @njit(parallel=True, cache=True)
     def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix):
         hs = np.zeros((max_ind))
         dx = np.min(np.diff(xs))
@@ -963,7 +963,7 @@ class Deposition(QThread):
             _mask[i] = 1
             hs += _mask*(np.sum(np.sort(I)))
         return hs
-@njit
+@njit(cache=True)
 def Iij(i, j, x_matrix, y_matrix, ang0, ang1):
     if j == 0:
         if i == 0:
@@ -1014,7 +1014,7 @@ def Iij(i, j, x_matrix, y_matrix, ang0, ang1):
                 res0 = res0_1 + res0_2 + res0_3 + res0_4
                 return res1  - res0
     
-@njit
+@njit(cache=True)
 def integrate(F, x, y, a0, a1): #F = F_matrix[p, q]
     res = 0
     for i in range(F.shape[0]):
