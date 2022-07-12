@@ -21,7 +21,7 @@ from numpy import (array, multiply, log10, mean, min)
 import os
 from multiprocessing import freeze_support
 
-import exception_hooks
+
 import design
 import functions 
 from global_parameters import *
@@ -72,12 +72,12 @@ class Opt(QThread):
         
 class Dep_log(QAbstractTableModel):
     
-    headers = ['R', 'k', 'N', 'omega', 'proc.\ntime', 'comp.\ntime', 'het.', 'err']
+    headers = ['R', 'k', 'N', 'omega', 'proc.\ntime', 'comp.\ntime', 'het.']
     
     def __init__(self, data=[], parent=None):
         super().__init__(parent)
         self.data = data
-        self.d = [0, 2, 2, 2, 0, 1, 2, 2]
+        self.d = [0, 2, 2, 2, 0, 1, 2]
                   
     def set_accuracy(self, i, d):
         self.d[i] = d
@@ -477,7 +477,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         for i in range(len(step)):
             d = ceil(log10(1/step[i]))
             self.deposition_log.set_accuracy(i, d)
-        self.tolerance_edit.setText(str(self.model.point_tolerance*100))
+        self.tolerance_edit.setText(str(self.model.tolerance*100))
         self.sub_res_edit.setText(str(self.model.substrate_res))
         self.plot_mesh()
         return True
@@ -503,9 +503,9 @@ class App(QMainWindow, design.Ui_MainWindow):
         ax1.set_aspect('equal')
         ax1.set_title('Сетка подложки\n')
         ax2 = self.mesh_plot_vl.canvas.figure.axes[1]
+        z = self.model.F(self.model.deposition_coords_x, self.model.deposition_coords_y, grid=True)
         im = ax2.contourf(self.model.deposition_coords_map_x, 
-                     self.model.deposition_coords_map_y, 
-                     self.model.deposition_coords_map_z, 100)
+                     self.model.deposition_coords_map_y, z, 100)
 
         ax2.plot(self.model.holder_circle_inner_x, 
                  self.model.holder_circle_inner_y, 
@@ -638,7 +638,7 @@ class App(QMainWindow, design.Ui_MainWindow):
         self.disable_return_shortcut()
         self.cancel_dep_button.setDisabled(False)
         args = [self.R, self.k, self.NR, 1, self.model.alpha0_sub, 
-                self.model.point_tolerance, self.model.cores]
+                self.model.tolerance]
         self.model.deposition.task(*args)
         self.p_dep_bar.setValue(0)
         self.model.deposition.start()
@@ -694,17 +694,11 @@ class App(QMainWindow, design.Ui_MainWindow):
         omega = thickness/self.h
         proc_time = self.NR/omega
         t = self.model.deposition.time[-1]
-        self.deposition_output.append(f'Неоднородность: ({round(het,2)} +- {round_to_1(4*self.model.point_tolerance*100)})%')
-        if het < self.model.point_tolerance*100*4/10:
-            msg = f'\nРезултат расчёта неоднородности может быть неверным, так как полученная неоднородность {round(het,2)}% меньше заданной точности расчёта {4*self.model.point_tolerance*100}% более чем на порядок. \nНеобходимо уменьшить параметр "Точность в точке"' 
-            self.warn(msg)
-            self.deposition_output.append(msg)
-        elif het < self.model.point_tolerance*4*100:
-            self.deposition_output.append(f'\nДостоверность расчёта неоднородности не может быть гарантированна, так как полученная неоднородность {round(het,2)}% меньше максимально возможной абсолютной погрешности +-{4*self.model.point_tolerance*100}%, однако обычно эта оценка погрешности превосходит реальную погрешность на порядок (т.е. оптимистичный прогноз абсолютной погрешности +-{round_to_1(self.model.point_tolerance*100*4/10)}%). Для достоверности рекомендуется уменьшить параметр "Точность в точке"')
+        self.deposition_output.append(f'Неоднородность: {round(het,2)}%')
         n = int(ceil(log10(1/omega)))
         
         
-        self.deposition_log.append([self.R, self.k, self.NR, omega, proc_time, t, het, self.model.point_tolerance*4*100])
+        self.deposition_log.append([self.R, self.k, self.NR, omega, proc_time, t, het])
         self.dep_log_table.model().layoutChanged.emit()
         for i in range(self.deposition_log.columnCount()-1):
             self.dep_log_table.resizeColumnToContents(i)
@@ -780,7 +774,7 @@ class App(QMainWindow, design.Ui_MainWindow):
                 self.model.R_step, self.model.k_step, self.model.NR_step,
                 self.model.R_mc_interval, self.model.k_mc_interval, 
                 self.model.NR_mc_interval, self.model.x0, self.model.minimizer, 
-                self.model.mc_iter, self.model.T, self.model.verbose]
+                self.model.mc_iter, self.model.T]
         self.optimisation_thread = Thread(self.optimizer.optimisation, args)
         self.cancelOptimiseButton.clicked.connect(self.optimisation_stop)
         self.optimisation_thread.finished.connect(self.optimisation_output)

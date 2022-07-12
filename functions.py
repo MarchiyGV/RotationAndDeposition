@@ -1,14 +1,13 @@
 from numpy import (
     convolve, ones, cos, sin, power, genfromtxt, arange, array, sqrt, pi,
-    linspace, meshgrid, arctan2, rot90, transpose, loadtxt, log10, arcsin
+    linspace, meshgrid, arctan2, rot90, loadtxt, log10, arcsin
     )
 from numpy import matlib
+#import pickle
 import numpy as np
-from multiprocessing import Pool
-from scipy.interpolate import interp1d, RegularGridInterpolator
+from scipy.interpolate import interp1d, RectBivariateSpline
 import time
 from scipy.integrate import quad
-from joblib import Memory
 from math import ceil
 import custom_minimizer 
 from scipy.optimize import basinhopping
@@ -19,6 +18,11 @@ from PyQt5 import QtWidgets
 import re
 import os
 import shutil
+from bsplines import bspline_basis_set
+from numba import njit, prange
+#from functools import lru_cache
+#from numpy_lru_cache_decorator import np_cache
+#import dill
 ''' 
 Functions and methods
 '''
@@ -74,17 +78,17 @@ class Model(QObject):
     def update(self,
                  fname_sim, fname_exp, rotation_type, C, source, magnetron_x, 
                  magnetron_y, substrate_shape, substrate_radius, 
-                 substrate_x_len, substrate_y_len, substrate_res, cores, 
-                 verbose, delete_cache, point_tolerance, 
+                 substrate_x_len, substrate_y_len, substrate_res, tolerance, 
                  holder_inner_radius, holder_outer_radius, deposition_len_x, 
                  deposition_len_y, R_step,
                  k_step, NR_step, R_extra_bounds, R_min, R_max, k_min, k_max, 
                  NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
                  minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
-                 R_min_step, k_min_step, NR_min_step, mc_iter, T):
+                 R_min_step, k_min_step, NR_min_step, mc_iter, T, smooth, 
+                 spline_order):
         
-        
-        self.memory = Memory('cache', verbose=0)
+        self.smooth = smooth
+        self.spline_order = spline_order
         self.count = 0
         self.rotation_type = rotation_type
         self.fname_sim = fname_sim
@@ -109,10 +113,7 @@ class Model(QObject):
         self.substrate_res = substrate_res
         self.substrate_rows = ceil(substrate_y_len*substrate_res)
         self.substrate_columns = ceil(substrate_x_len*substrate_res)
-        self.cores = cores # number of jobs for paralleling
-        self.verbose = verbose # True: print message each time when function of deposition called
-        self.delete_cache = delete_cache
-        self.point_tolerance = point_tolerance/100 
+        self.tolerance = tolerance/100 
         self.holder_inner_radius = holder_inner_radius  
         self.holder_outer_radius = holder_outer_radius
         self.deposition_len_x = deposition_len_x 
@@ -194,28 +195,6 @@ class Model(QObject):
         self.F_axial = False
         ####GEOMETRY + INITIALIZATION####
 
-        if self.delete_cache: 
-            try:
-                self.memory.clear(warn=False)
-                try:
-                    dirpath = 'temp_cache'
-                    if os.path.exists(dirpath) and os.path.isdir(dirpath):
-                        shutil.rmtree(dirpath)
-                except PermissionError:
-                    error('Не получилось удалить "temp_cache"')
-            except PermissionError as err:
-                msg1 = 'Нет доступа к кэшу, не получилось стереть кэш:\n\n'
-                msg2 = '\n\nДля текущей модели будет создана дополнительная папка "temp_cache".\nПеред следующим сеансом рекомендуется перезапустить Python//программу'
-                error(msg1+str(err)+msg2)
-                self.memory = Memory('temp_cache', verbose=0)
-                try:
-                    self.memory.clear(warn=False)
-                except PermissionError:
-                    error('Для новой папки произошла таже ошибка')
-                    self.success = False
-                    return False
-        else: error('WARNING: memory has not cleared, changes in the code or settings may be ignored')
-        
         ang=arange(0, 2*pi,0.01) #np.aarange
         self.holder_circle_inner_x=holder_inner_radius*cos(ang) #np.cos
         self.holder_circle_inner_y=holder_inner_radius*sin(ang) #np.sin
@@ -287,14 +266,68 @@ class Model(QObject):
         else: raise TypeError(f'incorrect source {source}')
         if not self.success: 
             return None
-        if not self.F_axial:
-            self.F = RegularGridInterpolator((self.deposition_coords_x, 
-                                              self.deposition_coords_y),  #scipy.interpolate.RegularGridInterpolator
-                                              transpose(self.deposition_coords_map_z), #np.transpose
-                                              bounds_error=False)
+        #if not self.F_axial:
+        self.F = RectBivariateSpline(self.deposition_coords_x, 
+                                     self.deposition_coords_y,  #scipy.interpolate.RegularGridInterpolator
+                                     self.deposition_coords_map_z,
+                                     s=self.smooth, kx=self.spline_order,
+                                     ky=self.spline_order)
+        self.F_coef = self.F.get_coeffs()
+        self.F_knots = self.F.get_knots()
+            
+        print('calculation x bspline representation...')
+        self.x_bspline_set = bspline_basis_set(self.spline_order, 
+                                               self.F_knots[0])
+        
+        print('calculation y bspline representation...')
+        self.y_bspline_set = bspline_basis_set(self.spline_order, 
+                                               self.F_knots[1])
+            
+        print('calculation matrix representation of spline... ')
+        n = len(self.F_knots[0])-(self.spline_order+1)
+        m = len(self.F_knots[1])-(self.spline_order+1)
+        k = self.spline_order+1
+        
+        t0 = time.time()
+        ai0 = np.zeros((len(self.x_bspline_set))).astype(np.int64)
+        bi0 = np.zeros((len(self.x_bspline_set))).astype(np.int64)
+        N_matrix = np.zeros((len(self.x_bspline_set), k, k))
+        for i in range(len(self.x_bspline_set)):
+            N = self.x_bspline_set[i]
+            bounds = self.F_knots[0][self.spline_order:-self.spline_order]
+            ai0[i], bi0[i], N_matrix[i] = self.convert_bspline_to_poly(N, bounds)
+            
+        aj0 = np.zeros((len(self.y_bspline_set))).astype(np.int64)
+        bj0 = np.zeros((len(self.y_bspline_set))).astype(np.int64)
+        M_matrix = np.zeros((len(self.y_bspline_set), k, k))    
+        for j in range(len(self.y_bspline_set)):
+            M = self.y_bspline_set[j]
+            bounds = self.F_knots[1][self.spline_order:-self.spline_order]
+            aj0[j], bj0[j], M_matrix[j] = self.convert_bspline_to_poly(M, bounds)
+        
+        self.F_matrix = self.calc_F_matrix(n, m, k, N_matrix, M_matrix, 
+                                           ai0, bi0, aj0, bj0, self.F_coef)
 
-        joblib_ignore=['self']
+        t = time.time()-t0
+        print(f'done: {t} s')
+
+        n = len(self.deposition_coords_x)
+        m = len(self.deposition_coords_y)
+        z = np.zeros((n, m))
+        z0 = self.F(self.deposition_coords_x, self.deposition_coords_y)
+        
+        for i in range(len(self.deposition_coords_x)):
+            x = self.deposition_coords_x[i]
+            for j in range(len(self.deposition_coords_y)):
+                y = self.deposition_coords_y[j]
+                z[i, j] = self.F_spline(x, y)
+        self.matrix_err = np.max(np.abs(z-z0))
+        print('spline dimension:', len(self.F_coef))
+        print('pline matrix shape:', self.F_matrix.shape)
+        print('matrix error:', self.matrix_err)
         '''
+        #joblib_ignore=['self']
+        
         if rotation_type == 'Planet':
             self.xyp = self.xyp_planet
         elif rotation_type == 'Solar':
@@ -302,9 +335,76 @@ class Model(QObject):
             joblib_ignore.append('k')
         '''    
         self.time_f = []
-        self.deposition = Deposition(self.rho, self.alpha0, self.F, self.dep_dr, njobs=self.cores)
+        self.deposition = Deposition(self.rho, self.alpha0, self.F,
+                                     self.dep_dr, self)
         
         self.success = True
+        
+    @staticmethod
+    @njit(cache=True)
+    def calc_F_matrix(n, m, k, N, M, ai0, bi0, aj0, bj0, F_coeff):
+        F_matrix = np.zeros((n, m, k, k))
+        for i in range(N.shape[0]):
+            for j in range(M.shape[0]):
+                NM = np.zeros((bi0[i]-ai0[i], bj0[j]-aj0[j], k, k))
+                for ki in range(NM.shape[0]):
+                    for kj in range(NM.shape[1]):
+                        for ni in range(NM.shape[2]):
+                            for nj in range(NM.shape[3]):
+                                val = F_coeff[i*m+j]*N[i, ki, ni]*M[j, kj, nj]
+                                NM[ki, kj, ni, nj] = val
+                F_matrix[ai0[i]:bi0[i], aj0[j]:bj0[j]] += NM
+        return F_matrix
+    
+    @staticmethod
+    @njit(cache=True)
+    def convert_bspline_to_poly(N, bounds):
+        k = N.shape[1]-2
+        N_matrix = np.zeros((k, k))
+        l = N.shape[0]
+        coeffs = np.zeros((l, k))
+        ai = np.zeros((l)).astype(np.int64)
+        bi = np.zeros((l)).astype(np.int64)
+        t = 0
+        for nn in N:
+            coeffs[t, :(len(nn)-2)] = nn[2:]
+            ai[t] = np.sum(bounds<=nn[0])-1
+            bi[t] = np.sum(bounds<=nn[1])-1
+            t+=1
+
+        ai0 = ai.min()
+        ai = ai-ai0
+        bi0 = bi.max()
+        bi = bi-ai0
+        for q in range(t):
+            for ki in range(ai[q], bi[q]):
+                N_matrix[ki, :coeffs.shape[1]] += coeffs[q, :]
+                
+        return ai0, bi0, N_matrix      
+            
+    def F_spline(self, x, y):
+        z = 0
+        if x == self.deposition_coords_x[-1]:
+            x = x-0.000001
+        p = self.dep_xi(x)
+        
+        if y == self.deposition_coords_y[-1]:
+            y = y-0.000001
+        q = self.dep_yi(y)
+    
+        coeffs = self.F_matrix[p, q]
+        for ki in range(coeffs.shape[0]):
+            for kj in range(coeffs.shape[1]):
+                z += coeffs[ki, kj]*(x**ki)*(y**kj)
+        return z
+    
+    def dep_xi(self, x):
+        a = np.sum(self.F_knots[0][self.spline_order:-self.spline_order]<=x)-1
+        return a
+        
+    def dep_yi(self, y):
+        a = np.sum(self.F_knots[1][self.spline_order:-self.spline_order]<=y)-1
+        return a
         
     def init_deposition_mesh(self, M=None, N=None, res_x=None, res_y=None):
         deposition_offset_x = -self.deposition_len_x/2 # mm
@@ -415,7 +515,7 @@ class Model(QObject):
         for a in ang: 
             x = x0*np.cos(a)+y0*np.sin(a)
             y = -x0*np.sin(a)+y0*np.cos(a)
-            h0 += self.F((x,y))/da
+            h0 += self.F(x,y, grid=False)/da
         h = matlib.repmat(h0, N, 1)
         r = np.linspace(0, self.holder_outer_radius)
         a = np.linspace(0, 2*pi, num=N)
@@ -427,11 +527,15 @@ class Deposition(QThread):
     msg_signal = pyqtSignal(str)
     debug_signal = pyqtSignal(str)
     
-    def __init__(self, rho, alpha, F, dep_dr, njobs=1, parent=None):
+    def __init__(self, rho, alpha, F, dep_dr, model, njobs=1, parent=None):
         super().__init__(parent)
         self.time = []
         n = len(rho)
         self.n = n
+        self.model = model
+        self.rho = rho
+        self.ind = range(len(rho))
+        self.alpha = alpha
         self.count = 0
         self.njobs = njobs
         if njobs == 1:
@@ -476,25 +580,48 @@ class Deposition(QThread):
     def debug(self, s):
         self.debug_signal.emit(s) 
             
-    def task(self, R, k, NR, omega, alpha0_sub, point_tolerance, cores):
+    def task(self, R, k, NR, omega, alpha0_sub, tolerance):
          self.R = R
          self.k = k
          self.NR = NR
          self.omega = omega
          self.alpha0_sub = alpha0_sub
-         self.point_tolerance = point_tolerance
-         self.cores = cores
+         self.tolerance = tolerance
          self.count = 0
+         self.I_lenx = 2
+         self.I_leny = 2
          
+    def xyp(self, a, i):
+        x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
+        y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
+        return x, y
+    
+    def dxyp(self, a, i):
+        dx = -self.R*sin(a)-self.rho[i]*self.k*sin(a*self.k + self.alpha[i])
+        dy = self.R*cos(a)+self.rho[i]*self.k*cos(a*self.k + self.alpha[i])
+        return dx, dy
+    
+    def xy_sym(self, i):
+        '''
+        x(a) and y(a) in format:
+        [[a1, b1, k1, phi1], [a2, b2, k2, phi2], ...]
+        where 
+        x(a) = sum_i ai*cos(ki*a + phi_i)
+        y(a) = sum_i bi*sin(ki*a + phi_i)
+        '''
+        x = np.array([[self.R, 1, 0], [self.rho[i], self.k, self.alpha[i]]]) 
+        y = np.array([[self.R, 1, 0], [self.rho[i], self.k, self.alpha[i]]]) 
+        return x, y
+
     def run(self):
+        t0 = time.time()
+        """
         R = self.R
         k = self.k
         NR = self.NR
         omega = self.omega
         alpha0_sub = self.alpha0_sub
         point_tolerance = self.point_tolerance
-        t0 = time.time()
-        
         if self.njobs == 1:
             self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
                                            point_tolerance)
@@ -502,7 +629,8 @@ class Deposition(QThread):
             self.hs = self.workers[0]()
         else:
             hs = []
-            result = []
+            #result = []
+            '''
             for worker in self.workers:
                 worker.set_properties(R, k, NR, omega, alpha0_sub,
                                       point_tolerance)
@@ -513,10 +641,246 @@ class Deposition(QThread):
                     result.append(a)
                 hs = [result[i].get() for i in range(len(self.workers)) ]
             self.hs = np.concatenate(hs)
+            '''
+        """
+
+        _s = slice(self.model.spline_order, 
+                   -self.model.spline_order)
+        xs = self.model.F_knots[0][_s] 
+        ys = self.model.F_knots[1][_s]
+        #temp = self.hs
+        hs = self.do(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
+                     len(self.ind), self.rho, self.alpha, self.model.F_matrix,
+                     self.tolerance)
+        self.hs = np.array(hs)/(2*pi*self.omega)
+        #print('relative error:', np.max(np.abs((self.hs-temp)/temp)))
         t = time.time()-t0
         self.time.append(t)
+        return
     
+    @staticmethod
+    @njit(parallel=True, cache=True)
+    def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix, 
+           tolerance):
+        hs = np.zeros((max_ind))
+        dx = np.min(np.diff(xs))
+        dy = np.min(np.diff(ys))
+        n_points_per_interval = 3 #how many points should be in each alpha interval
+        #tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
+        xtol = tolerance * dx
+        ytol = tolerance * dy
+        a = alpha0_sub
+        a1 = alpha0_sub + NR*2*pi
+        for i in prange(max_ind):
+            #print('finding edges...')
+            x = R*cos(a) + rho[i]*cos(a*k + alpha[i])
+            y = R*sin(a) + rho[i]*sin(a*k + alpha[i])
 
+            
+            '''x'''
+            max_dxy_da = R+rho[i]*k # dx/da, dy/da <= R+rho*k
+            da = (dx/max_dxy_da) / n_points_per_interval
+            num = ceil((a1-a)/da)+1
+            ang = np.linspace(a, a1, num)
+            p =  np.sum(xs<=x)-1
+            breaks_x = np.zeros((len(ang)))
+            ni0 = np.zeros((len(ang)+1))
+            ni0[0] = p
+            len_breaks_x = 0
+            
+            for j, aa in enumerate(ang):
+                x = R*cos(aa) + rho[i]*cos(aa*k + alpha[i])
+                p1 = np.sum(xs<=x)-1
+                if abs(p1-p)==1:
+                    if p1>p:
+                        c = 1
+                        a_pre = aa
+                        a_cur = ang[j-1]
+                        x_pre = x
+                        x_cur = R*cos(a_cur) + rho[i]*cos(a_cur*k + alpha[i])
+                    else:
+                        c = 0
+                        a_pre = ang[j-1]
+                        a_cur = aa
+                        x_pre = R*cos(a_pre) + rho[i]*cos(a_pre*k + alpha[i])
+                        x_cur = x
+                        
+                    x0 = xs[p+c]
+            
+                    a_mid = (a_pre*(x0-x_cur) + a_cur*(x_pre-x0))/(x_pre - x_cur)
+
+                    x = R*cos(a_mid) + rho[i]*cos(a_mid*k + alpha[i])
+                    while abs(x-x0)>xtol:
+                        #print('dx', x-x0)
+                        if x-x0 > 0:
+                            a_pre = a_mid
+                            x_pre = x
+                        else:
+                            a_cur = a_mid
+                            x_cur = x
+                        
+                        a_mid = (a_pre*(x0-x_cur) + a_cur*(x_pre-x0))/(x_pre - x_cur)
+                        x = R*cos(a_mid) + rho[i]*cos(a_mid*k + alpha[i])
+                        
+                    breaks_x[len_breaks_x] = a_mid
+                    ni0[len_breaks_x+1] = p1
+                    len_breaks_x += 1
+                    p = p1
+                elif abs(p1-p)>1:
+                    print('finding edges: angle step for x is too big!')
+                    
+            breaks_x = breaks_x[:len_breaks_x]
+            ni0 = ni0[:len_breaks_x+1]
+                    
+            '''y'''
+            da = (dy/max_dxy_da) / n_points_per_interval
+            num = ceil((a1-a)/da)+1
+            ang = np.linspace(a, a1, num)
+            q = np.sum(ys<=y)-1
+            breaks_y = np.zeros((len(ang)))
+            nj0 = np.zeros((len(ang)+1))
+            len_breaks_y = 0
+            nj0[0] = q
+            
+            for j, aa in enumerate(ang):
+                y = R*sin(aa) + rho[i]*sin(aa*k + alpha[i])
+                q1 = np.sum(ys<=y)-1
+                if abs(q1-q)==1:
+                    if q1>q:
+                        c = 1
+                        a_pre = aa
+                        a_cur = ang[j-1]
+                        y_pre = y
+                        y_cur = R*sin(a_cur) + rho[i]*sin(a_cur*k + alpha[i])
+                    else:
+                        c = 0
+                        a_pre = ang[j-1]
+                        a_cur = aa
+                        y_pre = R*sin(a_pre) + rho[i]*sin(a_pre*k + alpha[i])
+                        y_cur = y
+                        
+                        
+                    y0 = ys[q+c]
+                    
+                    a_mid = (a_pre*(y0-y_cur) + a_cur*(y_pre-y0))/(y_pre - y_cur)
+
+                    y = R*sin(a_mid) + rho[i]*sin(a_mid*k + alpha[i])
+                    while abs(y-y0)>ytol:
+                        #print('dy', y-y0)
+                        if y-y0 > 0: 
+                            a_pre = a_mid
+                            y_pre = y
+                        else:
+                            a_cur = a_mid
+                            y_cur = y
+                        
+                        a_mid = (a_pre*(y0-y_cur) + a_cur*(y_pre-y0))/(y_pre - y_cur)
+                        y = R*sin(a_mid) + rho[i]*sin(a_mid*k + alpha[i])
+                        
+                    breaks_y[len_breaks_y] = a_mid
+                    nj0[len_breaks_y+1] = q1
+                    len_breaks_y += 1
+                    q = q1
+                elif abs(q1-q)>1:
+                    print('finding edges: angle step for y is too big!')
+                
+                                    
+            breaks_y = breaks_y[:len_breaks_y]
+            nj0 = nj0[:len_breaks_y+1]
+                
+            '''combining'''
+            breaks = np.concatenate((np.array([a]), breaks_x, breaks_y))
+            ni = np.empty((breaks.shape[0]), dtype=np.int64)
+            x = R*cos(a) + rho[i]*cos(a*k + alpha[i])
+            y = R*sin(a) + rho[i]*sin(a*k + alpha[i])
+            ni[0] = np.sum(xs<=x)-1
+            nj = np.empty((breaks.shape[0]), dtype=np.int64)
+            nj[0] = np.sum(ys<=y)-1
+            ind = np.argsort(breaks)
+            for ki in range(1, breaks.shape[0]):
+                if ind[ki]<1+len(breaks_x):
+                    ni[ki] = ni0[ind[ki]]#заменить на ind[ki]
+                    nj[ki] = nj[ki-1]
+                else:
+                    ni[ki] = ni[ki-1]
+                    nj[ki] = nj0[ind[ki]-len(breaks_x)]
+            #print(ni, nj, ni0, nj0)
+            breaks = np.concatenate((breaks[ind], np.array([a1])))
+            #print('done')
+            
+            #print('integration...')
+            '''integration'''
+            x_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]]) 
+            y_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]]) 
+            I = np.zeros((len(ni)))
+            for j in range(I.shape[0]):
+                I[j] = integrate(F_matrix[ni[j], nj[j]], x_sym, y_sym, breaks[j], breaks[j+1])
+            #print('done')
+            _mask = np.zeros((max_ind))
+            _mask[i] = 1
+            hs += _mask*(np.sum(np.sort(I)))
+        return hs
+    
+@njit(cache=True)
+def Iij(i, j, x_matrix, y_matrix, ang0, ang1):
+    if j == 0:
+        if i == 0:
+            return ang1-ang0
+        elif i == 1:
+            [b0, k0, phi0], [b1, k1, phi1] = y_matrix
+            res1 = b0/k0 * np.sin(k0*ang1 + phi0) + b1/k1 * np.sin(k1*ang1 + phi1)
+            res0 = b0/k0 * np.sin(k0*ang0 + phi0) + b1/k1 * np.sin(k1*ang0 + phi1)
+            return res1 - res0
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij')
+    elif j == 1:
+        if i == 0:
+            [a0, k0, phi0], [a1, k1, phi1] = x_matrix
+            res1 = -a0/k0 * np.cos(k0*ang1 + phi0) - a1/k1 * np.cos(k1*ang1 + phi1)
+            res0 = -a0/k0 * np.cos(k0*ang0 + phi0) - a1/k1 * np.cos(k1*ang0 + phi1)
+            return res1 - res0
+        elif i == 1:
+            [a0, k0, phi0], [a1, k1, phi1] = x_matrix
+            [b0, k0_b, phi0_b], [b1, k1_b, phi1_b] = y_matrix
+            if k0 != k0_b:
+                print('case of different k0 has not implemented yet')
+            if k1 != k1_b:
+                print('case of different k1 has not implemented yet')
+            if phi0 != phi0_b:
+                print('case of different phi0 has not implemented yet')
+            if phi1 != phi1_b:
+                print('case of different phi1 has not implemented yet')    
+            if k0 == 0 or k1 == 0:
+                print('case of zero k0 or k1 has not implemented yet')
+            else:
+                res1_1 = -a0*b0/(4*k0) * np.cos(2*k0*ang1 + 2*phi0)
+                res1_2 = -a1*b1/(4*k1) * np.cos(2*k1*ang1 + 2*phi1)
+                res0_1 = -a0*b0/(4*k0) * np.cos(2*k0*ang0 + 2*phi0)
+                res0_2 = -a1*b1/(4*k1) * np.cos(2*k1*ang0 + 2*phi1)
+                if k1==k0:
+                    res1_3 = -(a1*b0-a0*b1)/2 * np.sin(phi0-phi1)*ang1
+                    res0_3 = -(a1*b0-a0*b1)/2 * np.sin(phi0-phi1)*ang0
+                else:
+                    res1_3 = (a1*b0-a0*b1)/(2*(k0-k1)) * np.cos((k0-k1)*ang1 + phi0-phi1)
+                    res0_3 = (a1*b0-a0*b1)/(2*(k0-k1)) * np.cos((k0-k1)*ang0 + phi0-phi1)
+                if k1==-k0:
+                    print('case of k0 == -k1 has not implemented yet')
+                else:
+                    res1_4 = -(a1*b0+a0*b1)/(2*(k0+k1)) * np.cos((k0+k1)*ang1 + phi0+phi1)
+                    res0_4 = -(a1*b0+a0*b1)/(2*(k0+k1)) * np.cos((k0+k1)*ang0 + phi0+phi1)
+                res1 = res1_1 + res1_2 + res1_3 + res1_4
+                res0 = res0_1 + res0_2 + res0_3 + res0_4
+                return res1  - res0
+    
+@njit(cache=True)
+def integrate(F, x, y, a0, a1): #F = F_matrix[p, q]
+    res = 0
+    for i in range(F.shape[0]):
+        for j in range(F.shape[1]):
+            if F[i, j] != 0:
+                res += F[i,j]*Iij(i, j, x, y, a0, a1)
+    return res  
+    
 class Worker:
     def __init__(self, F, rho, alpha, dep_dr):
         self.F = F
@@ -544,7 +908,7 @@ class Worker:
         ns = np.round(2*pi*self.NR*(self.R+self.rho*self.k)/self.dep_dr)
         hs = [quad(lambda a: self.F(self.xyp(a, i)), 
                    self.alpha0_sub, self.NR*2*pi,
-                   limit=int(ns[i]), 
+                   limit=max(1, int(ns[i])), 
                    epsrel=self.point_tolerance)[0] for i in self.ind]
         hs = np.array(hs)/(2*pi*self.omega)
         return hs
@@ -577,14 +941,15 @@ class Worker_single(QObject):
         x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
         y = self.R*sin(a)+self.rho[i]*sin(a*self.k + self.alpha[i])
         return x, y
-        
+    
     def __call__(self):
         hs = []
         for i in self.ind:
             n = int(round(2*pi*self.NR*(self.R+self.rho[i]*self.k)/self.dep_dr/21))
-            res = quad(lambda a: self.F(self.xyp(a, i)), 
+            
+            res = quad(lambda a: self.F(*self.xyp(a, i)), 
                                        self.alpha0_sub, self.NR*2*pi,
-                                       limit=n, 
+                                       limit=max(n, 1), 
                                        epsrel=self.point_tolerance,
                                        full_output=1)
             
@@ -598,8 +963,6 @@ class Worker_single(QObject):
             self.progress_signal.emit()
         hs = np.array(hs)/(2*pi*self.omega)
         return hs
-
-    
 
 class Optimizer(QObject):
     upd_signal = pyqtSignal(str)
