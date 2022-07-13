@@ -812,6 +812,10 @@ def Iij(i, j, z_matrix, ang0, ang1):
                             - 2*a0*a1*np.sin(ang1*(k0 + k1) + phi0 + phi1)))))
                     /(4*k0*k1*(k0**2 - k1**2)))
             return res1 - res0
+        elif j == 3:
+            res0 = ((-9*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(ang0*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(3*(ang0*k0 + phi0)) + a1*k0*(-9*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.cos(ang0*(k0 - 2*k1) + phi0 - 2*phi1) - (k0 - 2*k1)*(9*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(9*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(ang0*k1 + phi1) - a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(3*(ang0*k1 + phi1)) - 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang0*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.cos(ang0*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            res1 = ((-9*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(ang1*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(3*(ang1*k0 + phi0)) + a1*k0*(-9*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.cos(ang1*(k0 - 2*k1) + phi0 - 2*phi1) - (k0 - 2*k1)*(9*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(9*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(ang1*k1 + phi1) - a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(3*(ang1*k1 + phi1)) - 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang1*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.cos(ang1*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            return res1 - res0
         else:
             print('invalid index j = ' + str(j) + ' in Iij')
     elif i == 1:
@@ -836,136 +840,50 @@ def Iij(i, j, z_matrix, ang0, ang1):
             res0 = res0_1 + res0_2 + res0_3 + res0_4
             return res1  - res0
         elif j == 2:
-            res1_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang1 + phi0)
-            res0_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang0 + phi0)
-            res1_1 = (a1**3 + 2*a0**2*a1)/k1 * np.sin(k1*ang1 + phi1)
-            res0_1 = (a1**3 + 2*a0**2*a1)/k1 * np.sin(k1*ang0 + phi1)
-        
-            res1_2 = -a0**3/k0 * np.sin(3*k0*ang1 + 3*phi0)/3
-            res0_2 = -a0**3/k0 * np.sin(3*k0*ang0 + 3*phi0)/3
-            res1_3 = -a1**3/k1 * np.sin(3*k1*ang1 + 3*phi1)/3
-            res0_3 = -a1**3/k1 * np.sin(3*k1*ang0 + 3*phi1)/3
-            
-            if k0 == 2*k1:
-                print('case of k0 == 2*k1 has not implemented yet')
-            else:
-                res1_4 = a0*a1**2/(k0 - 2*k1) * np.sin((k0-2*k1)*ang1 + phi0-2*phi1)
-                res0_4 = a0*a1**2/(k0 - 2*k1) * np.sin((k0-2*k1)*ang0 + phi0-2*phi1)
-            if 2*k0 == k1:
-                print('case of 2*k0 == k1 has not implemented yet')
-            else:
-                res1_5 = a0**2*a1/(2*k0 - k1) * np.sin((2*k0-k1)*ang1 + 2*phi0-phi1)
-                res0_5 = a0**2*a1/(2*k0 - k1) * np.sin((2*k0-k1)*ang0 + 2*phi0-phi1)
-            
-            if k0 == -2*k1:
-                print('case of k0 == -2*k1 has not implemented yet')
-            else:
-                res1_6 = -3*a0*a1**2/(k0 + 2*k1) * np.sin((k0+2*k1)*ang1 + phi0+2*phi1)
-                res0_6 = -3*a0*a1**2/(k0 + 2*k1) * np.sin((k0+2*k1)*ang0 + phi0+2*phi1)
-            if 2*k0 == k1:
-                print('case of 2*k0 == k1 has not implemented yet')
-            else:
-                res1_7 = -3*a0**2*a1/(2*k0 + k1) * np.sin((2*k0+k1)*ang1 + 2*phi0+phi1)
-                res0_7 = -3*a0**2*a1/(2*k0 + k1) * np.sin((2*k0+k1)*ang0 + 2*phi0+phi1)
-            
-            res1 = res1_0 + res1_1 + res1_2 + res1_3 + res1_4 + res1_5 + res1_6 + res1_7 
-            res0 = res0_0 + res0_1 + res0_2 + res0_3 + res0_4 + res0_5 + res0_6 + res0_7
-            return (res1 - res0)/4
+            res0 = ((3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(ang0*k0 + phi0) - a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(3*(ang0*k0 + phi0)) + a1*k0*(-3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.sin(ang0*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(ang0*k1 + phi1) - a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(3*(ang0*k1 + phi1)) - 9*a0*k1*(a0*(k0 + 2*k1)*np.sin(ang0*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.sin(ang0*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            res1 = ((3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(ang1*k0 + phi0) - a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(3*(ang1*k0 + phi0)) + a1*k0*(-3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.sin(ang1*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(ang1*k1 + phi1) - a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(3*(ang1*k1 + phi1)) - 9*a0*k1*(a0*(k0 + 2*k1)*np.sin(ang1*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.sin(ang1*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            return res1 - res0
+        elif j == 3:
+            res0 = ((-4*a0**2*(a0**2 + 3*a1**2)*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(2*(ang0*k0 + phi0)) + a0**4*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(4*(ang0*k0 + phi0)) + a1*k0*(8*a0*a1**2*k1*(9*k0**4 + 36*k0**3*k1 + 26*k0**2*k1**2 - 4*k0*k1**3 - 3*k1**4)*np.cos(ang0*(k0 - 3*k1) + phi0 - 3*phi1) - (k0 - 3*k1)*(8*a0**3*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(4*a1*(3*a0**2 + a1**2)*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(2*(ang0*k1 + phi1)) - a1**3*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(4*(ang0*k1 + phi1)) - 4*a0*k1*(-6*(a0**2 + a1**2)*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 3*a0*a1*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(2*(ang0*(k0 + k1) + phi0 + phi1)) + 4*(k0 + k1)*(a0**2*(k0 + 3*k1)*np.cos(ang0*(3*k0 + k1) + 3*phi0 + phi1) + a1**2*(3*k0 + k1)*np.cos(ang0*(k0 + 3*k1) + phi0 + 3*phi1)))))))/(32.*k0*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)))
+            res1 = ((-4*a0**2*(a0**2 + 3*a1**2)*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(2*(ang1*k0 + phi0)) + a0**4*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(4*(ang1*k0 + phi0)) + a1*k0*(8*a0*a1**2*k1*(9*k0**4 + 36*k0**3*k1 + 26*k0**2*k1**2 - 4*k0*k1**3 - 3*k1**4)*np.cos(ang1*(k0 - 3*k1) + phi0 - 3*phi1) - (k0 - 3*k1)*(8*a0**3*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(4*a1*(3*a0**2 + a1**2)*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(2*(ang1*k1 + phi1)) - a1**3*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(4*(ang1*k1 + phi1)) - 4*a0*k1*(-6*(a0**2 + a1**2)*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 3*a0*a1*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(2*(ang1*(k0 + k1) + phi0 + phi1)) + 4*(k0 + k1)*(a0**2*(k0 + 3*k1)*np.cos(ang1*(3*k0 + k1) + 3*phi0 + phi1) + a1**2*(3*k0 + k1)*np.cos(ang1*(k0 + 3*k1) + phi0 + 3*phi1)))))))/(32.*k0*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)))
+            return res1 - res0
         else:
             print('invalid index j = ' + str(j) + ' in Iij')
     elif i == 2:
         if j == 0:
-
+            res0 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang0*k0 + phi0)) + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang0*(k0 - k1) + phi0 - phi1) + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang0*k1 + phi1)) + 2*k1*((a0**2 + a1**2)*ang0*(k0 + k1) + 2*a0*a1*np.sin(ang0*(k0 + k1) + phi0 + phi1)))))/(4*k0*k1*(k0**2 - k1**2)))
+            res1 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang1*k0 + phi0)) + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang1*(k0 - k1) + phi0 - phi1) + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang1*k1 + phi1)) + 2*k1*((a0**2 + a1**2)*ang1*(k0 + k1) + 2*a0*a1*np.sin(ang1*(k0 + k1) + phi0 + phi1)))))/(4*k0*k1*(k0**2 - k1**2)))
             return res1 - res0
         elif j == 1:
-            res0 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 
-                                                 + 4*k1**4)
-                      *np.cos(ang0*k0 + phi0) 
-                      + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)
-                      *np.cos(3*(ang0*k0 + phi0)) 
-                      + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 
-                                           + 2*k1**3)
-                      *np.cos(ang0*(k0 - 2*k1) + phi0 - 2*phi1) 
-                      + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)
-                      *np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) 
-                      + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 
-                                                          + 2*k1**2)
-                      *np.cos(ang0*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 
-                                                         + 2*k1**2)
-                      *np.cos(3*(ang0*k1 + phi1)) 
-                      + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang0*(2*k0 + k1) 
-                                                         + 2*phi0 + phi1) 
-                      + a1*(2*k0 + k1)*np.cos(ang0*(k0 + 2*k1) + phi0 
-                                                + 2*phi1))))))
-                      /(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
-            
-            res1 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 
-                                                 + 4*k1**4)
-                      *np.cos(ang1*k0 + phi0) 
-                      + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)
-                      *np.cos(3*(ang1*k0 + phi0)) 
-                      + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 
-                                           + 2*k1**3)
-                      *np.cos(ang1*(k0 - 2*k1) + phi0 - 2*phi1) 
-                      + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)
-                      *np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) 
-                      + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 
-                                                          + 2*k1**2)
-                      *np.cos(ang1*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 
-                                                         + 2*k1**2)
-                      *np.cos(3*(ang1*k1 + phi1)) 
-                      + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang1*(2*k0 + k1) 
-                                                         + 2*phi0 + phi1) 
-                      + a1*(2*k0 + k1)*np.cos((k0 + 2*k1) + phi0 
-                                                + 2*phi1))))))
-                      /(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            res0 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(ang0*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(3*(ang0*k0 + phi0)) + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.cos(ang0*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(ang0*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(3*(ang0*k1 + phi1)) + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang0*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.cos(ang0*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            res1 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(ang1*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.cos(3*(ang1*k0 + phi0)) + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.cos(ang1*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(ang1*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.cos(3*(ang1*k1 + phi1)) + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang1*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.cos(ang1*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
             return res1 - res0
         elif j == 2:
-            res0 = (((16*a0*a1**3*np.cos(2*ang0*k1 + phi0 + 3*phi1)
-                    *np.sin(ang0*(k0 + k1)))/(k0 + 3*k1) 
-                    - (a0**4*np.sin(4*(ang0*k0 + phi0)))/k0 
-                    + (4*a0**2*a1**2*k0*np.cos(2*ang0*k1)
-                    *np.sin(2*(ang0*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (4*a0**2*a1**2*k1*np.cos(2*ang0*k1)
-                    *np.sin(2*(ang0*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (16*a0**3*a1*np.cos(ang0*(k0 + k1))
-                    *np.sin(2*ang0*k0 + phi0 - phi1))/(k0 - k1) 
-                    - (a1**4*np.cos(4*ang0*k1)*np.sin(4*phi1))/k1 
-                    - (16*a0*a1**3*np.cos(ang0*(k0 + k1))
-                    *np.sin(2*ang0*k1 - phi0 + phi1))/(k0 - k1) 
-                    - (4*a0**2*a1**2*k0*np.cos(2*ang0*k1)
-                    *np.sin(2*(ang0*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (4*a0**2*a1**2*k1*np.cos(2*ang0*k1)
-                    *np.sin(2*(ang0*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
-                    - (8*a0**2*a1**2
-                    *np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)))/(k0 + k1) 
-                    - (16*a0**3*a1*np.cos(ang0*(k0 + k1))
-                    *np.sin(2*ang0*k0 + 3*phi0 + phi1))/(3*k0 + k1) 
-                    - (16*a0*a1**3*np.cos(ang0*(k0 + k1))
-                    *np.sin(2*ang0*k1 + phi0 + 3*phi1))/(k0 + 3*k1))/32)
-            
-            res1 = (((16*a0*a1**3*np.cos(2*ang1*k1 + phi0 + 3*phi1)
-                    *np.sin(ang1*(k0 + k1)))/(k0 + 3*k1) 
-                    - (a0**4*np.sin(4*(ang1*k0 + phi0)))/k0 
-                    + (4*a0**2*a1**2*k0*np.cos(2*ang1*k1)
-                    *np.sin(2*(ang1*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (4*a0**2*a1**2*k1*np.cos(2*ang1*k1)
-                    *np.sin(2*(ang1*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (16*a0**3*a1*np.cos(ang1*(k0 + k1))
-                    *np.sin(2*ang1*k0 + phi0 - phi1))/(k0 - k1) 
-                    - (a1**4*np.cos(4*ang1*k1)*np.sin(4*phi1))/k1 
-                    - (16*a0*a1**3*np.cos(ang1*(k0 + k1))
-                    *np.sin(2*ang1*k1 - phi0 + phi1))/(k0 - k1) 
-                    - (4*a0**2*a1**2*k0*np.cos(2*ang1*k1)
-                    *np.sin(2*(ang1*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
-                    + (4*a0**2*a1**2*k1*np.cos(2*ang1*k1)
-                    *np.sin(2*(ang1*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
-                    - (8*a0**2*a1**2
-                    *np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)))/(k0 + k1) 
-                    - (16*a0**3*a1*np.cos(ang1*(k0 + k1))
-                    *np.sin(2*ang1*k0 + 3*phi0 + phi1))/(3*k0 + k1) 
-                    - (16*a0*a1**3*np.cos(ang1*(k0 + k1))
-                    *np.sin(2*ang1*k1 + phi0 + 3*phi1))/(k0 + 3*k1))/32)
+            res0 = ((a0**4*k1*(-3*k0**4 - 10*k0**3*k1 + 10*k0*k1**3 + 3*k1**4)*np.sin(4*(ang0*k0 + phi0)) + k0*(12*a0**4*ang0*k0**4*k1 + 48*a0**2*a1**2*ang0*k0**4*k1 + 12*a1**4*ang0*k0**4*k1 + 40*a0**4*ang0*k0**3*k1**2 + 160*a0**2*a1**2*ang0*k0**3*k1**2 + 40*a1**4*ang0*k0**3*k1**2 - 40*a0**4*ang0*k0*k1**4 - 160*a0**2*a1**2*ang0*k0*k1**4 - 40*a1**4*ang0*k0*k1**4 - 12*a0**4*ang0*k1**5 - 48*a0**2*a1**2*ang0*k1**5 - 12*a1**4*ang0*k1**5 + 16*a0**3*a1*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.sin(ang0*(k0 - k1) + phi0 - phi1) + 4*a0**2*a1**2*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.sin(2*(ang0*k0 - ang0*k1 + phi0 - phi1)) - 3*a1**4*k0**4*np.sin(4*(ang0*k1 + phi1)) - 10*a1**4*k0**3*k1*np.sin(4*(ang0*k1 + phi1)) + 10*a1**4*k0*k1**3*np.sin(4*(ang0*k1 + phi1)) + 3*a1**4*k1**4*np.sin(4*(ang0*k1 + phi1)) - 48*a0*a1**3*k0**3*k1*np.sin(ang0*(-k0 + k1) - phi0 + phi1) - 208*a0*a1**3*k0**2*k1**2*np.sin(ang0*(-k0 + k1) - phi0 + phi1) - 208*a0*a1**3*k0*k1**3*np.sin(ang0*(-k0 + k1) - phi0 + phi1) - 48*a0*a1**3*k1**4*np.sin(ang0*(-k0 + k1) - phi0 + phi1) - 36*a0**2*a1**2*k0**3*k1*np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)) - 84*a0**2*a1**2*k0**2*k1**2*np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)) + 84*a0**2*a1**2*k0*k1**3*np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)) + 36*a0**2*a1**2*k1**4*np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)) - 16*a0**3*a1*k0**3*k1*np.sin(3*ang0*k0 + ang0*k1 + 3*phi0 + phi1) - 48*a0**3*a1*k0**2*k1**2*np.sin(3*ang0*k0 + ang0*k1 + 3*phi0 + phi1) + 16*a0**3*a1*k0*k1**3*np.sin(3*ang0*k0 + ang0*k1 + 3*phi0 + phi1) + 48*a0**3*a1*k1**4*np.sin(3*ang0*k0 + ang0*k1 + 3*phi0 + phi1) - 48*a0*a1**3*k0**3*k1*np.sin(ang0*k0 + 3*ang0*k1 + phi0 + 3*phi1) - 16*a0*a1**3*k0**2*k1**2*np.sin(ang0*k0 + 3*ang0*k1 + phi0 + 3*phi1) + 48*a0*a1**3*k0*k1**3*np.sin(ang0*k0 + 3*ang0*k1 + phi0 + 3*phi1) + 16*a0*a1**3*k1**4*np.sin(ang0*k0 + 3*ang0*k1 + phi0 + 3*phi1)))/(32.*k0*(k0 - k1)*k1*(k0 + k1)*(3*k0 + k1)*(k0 + 3*k1)))
+            res1 = ((a0**4*k1*(-3*k0**4 - 10*k0**3*k1 + 10*k0*k1**3 + 3*k1**4)*np.sin(4*(ang1*k0 + phi0)) + k0*(12*a0**4*ang1*k0**4*k1 + 48*a0**2*a1**2*ang1*k0**4*k1 + 12*a1**4*ang1*k0**4*k1 + 40*a0**4*ang1*k0**3*k1**2 + 160*a0**2*a1**2*ang1*k0**3*k1**2 + 40*a1**4*ang1*k0**3*k1**2 - 40*a0**4*ang1*k0*k1**4 - 160*a0**2*a1**2*ang1*k0*k1**4 - 40*a1**4*ang1*k0*k1**4 - 12*a0**4*ang1*k1**5 - 48*a0**2*a1**2*ang1*k1**5 - 12*a1**4*ang1*k1**5 + 16*a0**3*a1*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.sin(ang1*(k0 - k1) + phi0 - phi1) + 4*a0**2*a1**2*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.sin(2*(ang1*k0 - ang1*k1 + phi0 - phi1)) - 3*a1**4*k0**4*np.sin(4*(ang1*k1 + phi1)) - 10*a1**4*k0**3*k1*np.sin(4*(ang1*k1 + phi1)) + 10*a1**4*k0*k1**3*np.sin(4*(ang1*k1 + phi1)) + 3*a1**4*k1**4*np.sin(4*(ang1*k1 + phi1)) - 48*a0*a1**3*k0**3*k1*np.sin(ang1*(-k0 + k1) - phi0 + phi1) - 208*a0*a1**3*k0**2*k1**2*np.sin(ang1*(-k0 + k1) - phi0 + phi1) - 208*a0*a1**3*k0*k1**3*np.sin(ang1*(-k0 + k1) - phi0 + phi1) - 48*a0*a1**3*k1**4*np.sin(ang1*(-k0 + k1) - phi0 + phi1) - 36*a0**2*a1**2*k0**3*k1*np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)) - 84*a0**2*a1**2*k0**2*k1**2*np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)) + 84*a0**2*a1**2*k0*k1**3*np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)) + 36*a0**2*a1**2*k1**4*np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)) - 16*a0**3*a1*k0**3*k1*np.sin(3*ang1*k0 + ang1*k1 + 3*phi0 + phi1) - 48*a0**3*a1*k0**2*k1**2*np.sin(3*ang1*k0 + ang1*k1 + 3*phi0 + phi1) + 16*a0**3*a1*k0*k1**3*np.sin(3*ang1*k0 + ang1*k1 + 3*phi0 + phi1) + 48*a0**3*a1*k1**4*np.sin(3*ang1*k0 + ang1*k1 + 3*phi0 + phi1) - 48*a0*a1**3*k0**3*k1*np.sin(ang1*k0 + 3*ang1*k1 + phi0 + 3*phi1) - 16*a0*a1**3*k0**2*k1**2*np.sin(ang1*k0 + 3*ang1*k1 + phi0 + 3*phi1) + 48*a0*a1**3*k0*k1**3*np.sin(ang1*k0 + 3*ang1*k1 + phi0 + 3*phi1) + 16*a0*a1**3*k1**4*np.sin(ang1*k0 + 3*ang1*k1 + phi0 + 3*phi1)))/(32.*k0*(k0 - k1)*k1*(k0 + k1)*(3*k0 + k1)*(k0 + 3*k1)))
+            return res1 - res0
+        elif j == 3:
+            res0 = (((-30*a0*(a0**4 + 6*a0**2*a1**2 + 3*a1**4)*np.cos(ang0*k0 + phi0))/k0 - (5*(a0**5 + 4*a0**3*a1**2)*np.cos(3*(ang0*k0 + phi0)))/k0 + (3*a0**5*np.cos(5*(ang0*k0 + phi0)))/k0 + (15*a0*a1**4*np.cos(ang0*k0 - 4*ang0*k1 + phi0 - 4*phi1))/(k0 - 4*k1) + (30*a0**2*a1**3*np.cos(2*ang0*k0 - 3*ang0*k1 + 2*phi0 - 3*phi1))/(2*k0 - 3*k1) + (90*a0**3*a1**2*np.cos(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (60*a0*a1**4*np.cos(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1))/(k0 - 2*k1) - (30*a0**3*a1**2*np.cos(3*ang0*k0 - 2*ang0*k1 + 3*phi0 - 2*phi1))/(3*k0 - 2*k1) - (60*a0**4*a1*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (90*a0**2*a1**3*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (15*a0**4*a1*np.cos(4*ang0*k0 - ang0*k1 + 4*phi0 - phi1))/(4*k0 - k1) - (90*a0**4*a1*np.cos(ang0*k1 + phi1))/k1 - (180*a0**2*a1**3*np.cos(ang0*k1 + phi1))/k1 - (30*a1**5*np.cos(ang0*k1 + phi1))/k1 - (20*a0**2*a1**3*np.cos(3*(ang0*k1 + phi1)))/k1 - (5*a1**5*np.cos(3*(ang0*k1 + phi1)))/k1 + (3*a1**5*np.cos(5*(ang0*k1 + phi1)))/k1 - (60*a0**4*a1*np.cos(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (90*a0**2*a1**3*np.cos(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) + (75*a0**4*a1*np.cos(4*ang0*k0 + ang0*k1 + 4*phi0 + phi1))/(4*k0 + k1) - (90*a0**3*a1**2*np.cos(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (60*a0*a1**4*np.cos(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) + (150*a0**3*a1**2*np.cos(3*ang0*k0 + 2*ang0*k1 + 3*phi0 + 2*phi1))/(3*k0 + 2*k1) + (150*a0**2*a1**3*np.cos(2*ang0*k0 + 3*ang0*k1 + 2*phi0 + 3*phi1))/(2*k0 + 3*k1) + (75*a0*a1**4*np.cos(ang0*k0 + 4*ang0*k1 + phi0 + 4*phi1))/(k0 + 4*k1))/240.)
+            res1 = (((-30*a0*(a0**4 + 6*a0**2*a1**2 + 3*a1**4)*np.cos(ang1*k0 + phi0))/k0 - (5*(a0**5 + 4*a0**3*a1**2)*np.cos(3*(ang1*k0 + phi0)))/k0 + (3*a0**5*np.cos(5*(ang1*k0 + phi0)))/k0 + (15*a0*a1**4*np.cos(ang1*k0 - 4*ang1*k1 + phi0 - 4*phi1))/(k0 - 4*k1) + (30*a0**2*a1**3*np.cos(2*ang1*k0 - 3*ang1*k1 + 2*phi0 - 3*phi1))/(2*k0 - 3*k1) + (90*a0**3*a1**2*np.cos(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (60*a0*a1**4*np.cos(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1))/(k0 - 2*k1) - (30*a0**3*a1**2*np.cos(3*ang1*k0 - 2*ang1*k1 + 3*phi0 - 2*phi1))/(3*k0 - 2*k1) - (60*a0**4*a1*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (90*a0**2*a1**3*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (15*a0**4*a1*np.cos(4*ang1*k0 - ang1*k1 + 4*phi0 - phi1))/(4*k0 - k1) - (90*a0**4*a1*np.cos(ang1*k1 + phi1))/k1 - (180*a0**2*a1**3*np.cos(ang1*k1 + phi1))/k1 - (30*a1**5*np.cos(ang1*k1 + phi1))/k1 - (20*a0**2*a1**3*np.cos(3*(ang1*k1 + phi1)))/k1 - (5*a1**5*np.cos(3*(ang1*k1 + phi1)))/k1 + (3*a1**5*np.cos(5*(ang1*k1 + phi1)))/k1 - (60*a0**4*a1*np.cos(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (90*a0**2*a1**3*np.cos(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) + (75*a0**4*a1*np.cos(4*ang1*k0 + ang1*k1 + 4*phi0 + phi1))/(4*k0 + k1) - (90*a0**3*a1**2*np.cos(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (60*a0*a1**4*np.cos(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) + (150*a0**3*a1**2*np.cos(3*ang1*k0 + 2*ang1*k1 + 3*phi0 + 2*phi1))/(3*k0 + 2*k1) + (150*a0**2*a1**3*np.cos(2*ang1*k0 + 3*ang1*k1 + 2*phi0 + 3*phi1))/(2*k0 + 3*k1) + (75*a0*a1**4*np.cos(ang1*k0 + 4*ang1*k1 + phi0 + 4*phi1))/(k0 + 4*k1))/240.)
+            return res1 - res0
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij')
+    elif i == 3:
+        if j == 0:
+            res0 = ((9*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(ang0*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(3*(ang0*k0 + phi0)) + a1*k0*(-9*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.sin(ang0*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(9*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(9*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(ang0*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(3*(ang0*k1 + phi1)) + 9*a0*k1*(a0*(k0 + 2*k1)*np.sin(ang0*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.sin(ang0*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))   
+            res1 = ((9*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(ang1*k0 + phi0) + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)*np.sin(3*(ang1*k0 + phi0)) + a1*k0*(-9*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 + 2*k1**3)*np.sin(ang1*(k0 - 2*k1) + phi0 - 2*phi1) + (k0 - 2*k1)*(9*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + (2*k0 - k1)*(9*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(ang1*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 + 2*k1**2)*np.sin(3*(ang1*k1 + phi1)) + 9*a0*k1*(a0*(k0 + 2*k1)*np.sin(ang1*(2*k0 + k1) + 2*phi0 + phi1) + a1*(2*k0 + k1)*np.sin(ang1*(k0 + 2*k1) + phi0 + 2*phi1))))))/(12.*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            return res1 - res0
+        elif j == 1:
+            res0 = (-(4*a0**2*(a0**2 + 3*a1**2)*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(2*(ang0*k0 + phi0)) + a0**4*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(4*(ang0*k0 + phi0)) + a1*k0*(8*a0*a1**2*k1*(-9*k0**4 - 36*k0**3*k1 - 26*k0**2*k1**2 + 4*k0*k1**3 + 3*k1**4)*np.cos(ang0*(k0 - 3*k1) + phi0 - 3*phi1) + (k0 - 3*k1)*(8*a0**3*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(4*a1*(3*a0**2 + a1**2)*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(2*(ang0*k1 + phi1)) + a1**3*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(4*(ang0*k1 + phi1)) + 4*a0*k1*(6*(a0**2 + a1**2)*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 3*a0*a1*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(2*(ang0*(k0 + k1) + phi0 + phi1)) + 4*(k0 + k1)*(a0**2*(k0 + 3*k1)*np.cos(ang0*(3*k0 + k1) + 3*phi0 + phi1) + a1**2*(3*k0 + k1)*np.cos(ang0*(k0 + 3*k1) + phi0 + 3*phi1)))))))/(32.*k0*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)))
+            res1 = (-(4*a0**2*(a0**2 + 3*a1**2)*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(2*(ang1*k0 + phi0)) + a0**4*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)*np.cos(4*(ang1*k0 + phi0)) + a1*k0*(8*a0*a1**2*k1*(-9*k0**4 - 36*k0**3*k1 - 26*k0**2*k1**2 + 4*k0*k1**3 + 3*k1**4)*np.cos(ang1*(k0 - 3*k1) + phi0 - 3*phi1) + (k0 - 3*k1)*(8*a0**3*k1*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(4*a1*(3*a0**2 + a1**2)*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(2*(ang1*k1 + phi1)) + a1**3*(3*k0**3 + 13*k0**2*k1 + 13*k0*k1**2 + 3*k1**3)*np.cos(4*(ang1*k1 + phi1)) + 4*a0*k1*(6*(a0**2 + a1**2)*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 3*a0*a1*(3*k0**2 + 10*k0*k1 + 3*k1**2)*np.cos(2*(ang1*(k0 + k1) + phi0 + phi1)) + 4*(k0 + k1)*(a0**2*(k0 + 3*k1)*np.cos(ang1*(3*k0 + k1) + 3*phi0 + phi1) + a1**2*(3*k0 + k1)*np.cos(ang1*(k0 + 3*k1) + phi0 + 3*phi1)))))))/(32.*k0*k1*(9*k0**5 + 9*k0**4*k1 - 82*k0**3*k1**2 - 82*k0**2*k1**3 + 9*k0*k1**4 + 9*k1**5)))
+            return res1 - res0
+        elif j == 2:
+            res0 = (((30*a0*(a0**4 + 6*a0**2*a1**2 + 3*a1**4)*np.sin(ang0*k0 + phi0))/k0 - (5*(a0**5 + 4*a0**3*a1**2)*np.sin(3*(ang0*k0 + phi0)))/k0 - (3*a0**5*np.sin(5*(ang0*k0 + phi0)))/k0 - (15*a0*a1**4*np.sin(ang0*k0 - 4*ang0*k1 + phi0 - 4*phi1))/(k0 - 4*k1) + (30*a0**2*a1**3*np.sin(2*ang0*k0 - 3*ang0*k1 + 2*phi0 - 3*phi1))/(2*k0 - 3*k1) + (90*a0**3*a1**2*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (60*a0*a1**4*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (30*a0**3*a1**2*np.sin(3*ang0*k0 - 2*ang0*k1 + 3*phi0 - 2*phi1))/(3*k0 - 2*k1) + (60*a0**4*a1*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) + (90*a0**2*a1**3*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (15*a0**4*a1*np.sin(4*ang0*k0 - ang0*k1 + 4*phi0 - phi1))/(4*k0 - k1) + (90*a0**4*a1*np.sin(ang0*k1 + phi1))/k1 + (180*a0**2*a1**3*np.sin(ang0*k1 + phi1))/k1 + (30*a1**5*np.sin(ang0*k1 + phi1))/k1 - (20*a0**2*a1**3*np.sin(3*(ang0*k1 + phi1)))/k1 - (5*a1**5*np.sin(3*(ang0*k1 + phi1)))/k1 - (3*a1**5*np.sin(5*(ang0*k1 + phi1)))/k1 - (60*a0**4*a1*np.sin(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (90*a0**2*a1**3*np.sin(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (75*a0**4*a1*np.sin(4*ang0*k0 + ang0*k1 + 4*phi0 + phi1))/(4*k0 + k1) - (90*a0**3*a1**2*np.sin(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (60*a0*a1**4*np.sin(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (150*a0**3*a1**2*np.sin(3*ang0*k0 + 2*ang0*k1 + 3*phi0 + 2*phi1))/(3*k0 + 2*k1) - (150*a0**2*a1**3*np.sin(2*ang0*k0 + 3*ang0*k1 + 2*phi0 + 3*phi1))/(2*k0 + 3*k1) - (75*a0*a1**4*np.sin(ang0*k0 + 4*ang0*k1 + phi0 + 4*phi1))/(k0 + 4*k1))/240.)
+            res1 = (((30*a0*(a0**4 + 6*a0**2*a1**2 + 3*a1**4)*np.sin(ang1*k0 + phi0))/k0 - (5*(a0**5 + 4*a0**3*a1**2)*np.sin(3*(ang1*k0 + phi0)))/k0 - (3*a0**5*np.sin(5*(ang1*k0 + phi0)))/k0 - (15*a0*a1**4*np.sin(ang1*k0 - 4*ang1*k1 + phi0 - 4*phi1))/(k0 - 4*k1) + (30*a0**2*a1**3*np.sin(2*ang1*k0 - 3*ang1*k1 + 2*phi0 - 3*phi1))/(2*k0 - 3*k1) + (90*a0**3*a1**2*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (60*a0*a1**4*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1))/(k0 - 2*k1) + (30*a0**3*a1**2*np.sin(3*ang1*k0 - 2*ang1*k1 + 3*phi0 - 2*phi1))/(3*k0 - 2*k1) + (60*a0**4*a1*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) + (90*a0**2*a1**3*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (15*a0**4*a1*np.sin(4*ang1*k0 - ang1*k1 + 4*phi0 - phi1))/(4*k0 - k1) + (90*a0**4*a1*np.sin(ang1*k1 + phi1))/k1 + (180*a0**2*a1**3*np.sin(ang1*k1 + phi1))/k1 + (30*a1**5*np.sin(ang1*k1 + phi1))/k1 - (20*a0**2*a1**3*np.sin(3*(ang1*k1 + phi1)))/k1 - (5*a1**5*np.sin(3*(ang1*k1 + phi1)))/k1 - (3*a1**5*np.sin(5*(ang1*k1 + phi1)))/k1 - (60*a0**4*a1*np.sin(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (90*a0**2*a1**3*np.sin(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (75*a0**4*a1*np.sin(4*ang1*k0 + ang1*k1 + 4*phi0 + phi1))/(4*k0 + k1) - (90*a0**3*a1**2*np.sin(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (60*a0*a1**4*np.sin(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (150*a0**3*a1**2*np.sin(3*ang1*k0 + 2*ang1*k1 + 3*phi0 + 2*phi1))/(3*k0 + 2*k1) - (150*a0**2*a1**3*np.sin(2*ang1*k0 + 3*ang1*k1 + 2*phi0 + 3*phi1))/(2*k0 + 3*k1) - (75*a0*a1**4*np.sin(ang1*k0 + 4*ang1*k1 + phi0 + 4*phi1))/(k0 + 4*k1))/240.)
+            return res1 - res0
+        elif j == 3:
+            res0 = ((-9*a0**2*(a0**4 + 8*a0**2*a1**2 + 6*a1**4)*k1*(60*k0**9 + 172*k0**8*k1 - 1063*k0**7*k1**2 - 1539*k0**6*k1**3 + 3666*k0**5*k1**4 + 3666*k0**4*k1**5 - 1539*k0**3*k1**6 - 1063*k0**2*k1**7 + 172*k0*k1**8 + 60*k1**9)*np.cos(2*(ang0*k0 + phi0)) + a0**6*k1*(60*k0**9 + 172*k0**8*k1 - 1063*k0**7*k1**2 - 1539*k0**6*k1**3 + 3666*k0**5*k1**4 + 3666*k0**4*k1**5 - 1539*k0**3*k1**6 - 1063*k0**2*k1**7 + 172*k0*k1**8 + 60*k1**9)*np.cos(6*(ang0*k0 + phi0)) - a1*k0*(36*a0*a1**2*(2*a0**2 + a1**2)*k1*(-60*k0**8 - 352*k0**7*k1 + 7*k0**6*k1**2 + 1560*k0**5*k1**3 + 1014*k0**4*k1**4 - 624*k0**3*k1**5 - 333*k0**2*k1**6 + 64*k0*k1**7 + 20*k1**8)*np.cos(ang0*(k0 - 3*k1) + phi0 - 3*phi1) + (k0 - 3*k1)*(-9*a0**2*a1**3*k1*(60*k0**7 + 472*k0**6*k1 + 937*k0**5*k1**2 + 314*k0**4*k1**3 - 386*k0**3*k1**4 - 148*k0**2*k1**5 + 37*k0*k1**6 + 10*k1**7)*np.cos(2*(ang0*(k0 - 2*k1) + phi0 - 2*phi1)) + (k0 - 2*k1)*(9*a0**4*a1*k1*(30*k0**6 + 251*k0**5*k1 + 594*k0**4*k1**2 + 454*k0**3*k1**3 + 34*k0**2*k1**4 - 57*k0*k1**5 - 10*k1**6)*np.cos(4*ang0*k0 - 2*ang0*k1 + 4*phi0 - 2*phi1) + (2*k0 - k1)*(36*a0**3*(a0**2 + 2*a1**2)*k1*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(9*a1*(6*a0**4 + 8*a0**2*a1**2 + a1**4)*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(2*(ang0*k1 + phi1)) - a1**5*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(6*(ang0*k1 + phi1)) + a0*k1*(72*(a0**4 + 3*a0**2*a1**2 + a1**4)*(10*k0**4 + 77*k0**3*k1 + 150*k0**2*k1**2 + 77*k0*k1**3 + 10*k1**4)*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 40*a0**2*a1**2*(10*k0**4 + 77*k0**3*k1 + 150*k0**2*k1**2 + 77*k0*k1**3 + 10*k1**4)*np.cos(3*(ang0*(k0 + k1) + phi0 + phi1)) - 9*(k0 + k1)*(5*a0**3*a1*(5*k0**3 + 36*k0**2*k1 + 57*k0*k1**2 + 10*k1**3)*np.cos(2*(ang0*(2*k0 + k1) + 2*phi0 + phi1)) + (2*k0 + k1)*(4*a0**4*(k0**2 + 7*k0*k1 + 10*k1**2)*np.cos(ang0*(5*k0 + k1) + 5*phi0 + phi1) + a1**3*(5*k0 + k1)*(5*a0*(k0 + 5*k1)*np.cos(2*(ang0*(k0 + 2*k1) + phi0 + 2*phi1)) + 4*a1*(k0 + 2*k1)*np.cos(ang0*(k0 + 5*k1) + phi0 + 5*phi1)))))))))))/(192.*k0*(k0 - 3*k1)*(k0 - 2*k1)*(2*k0 - k1)*(3*k0 - k1)*k1*(k0 + k1)*(2*k0 + k1)*(5*k0 + k1)*(k0 + 2*k1)*(k0 + 5*k1)))
+            res1 = ((-9*a0**2*(a0**4 + 8*a0**2*a1**2 + 6*a1**4)*k1*(60*k0**9 + 172*k0**8*k1 - 1063*k0**7*k1**2 - 1539*k0**6*k1**3 + 3666*k0**5*k1**4 + 3666*k0**4*k1**5 - 1539*k0**3*k1**6 - 1063*k0**2*k1**7 + 172*k0*k1**8 + 60*k1**9)*np.cos(2*(ang1*k0 + phi0)) + a0**6*k1*(60*k0**9 + 172*k0**8*k1 - 1063*k0**7*k1**2 - 1539*k0**6*k1**3 + 3666*k0**5*k1**4 + 3666*k0**4*k1**5 - 1539*k0**3*k1**6 - 1063*k0**2*k1**7 + 172*k0*k1**8 + 60*k1**9)*np.cos(6*(ang1*k0 + phi0)) - a1*k0*(36*a0*a1**2*(2*a0**2 + a1**2)*k1*(-60*k0**8 - 352*k0**7*k1 + 7*k0**6*k1**2 + 1560*k0**5*k1**3 + 1014*k0**4*k1**4 - 624*k0**3*k1**5 - 333*k0**2*k1**6 + 64*k0*k1**7 + 20*k1**8)*np.cos(ang1*(k0 - 3*k1) + phi0 - 3*phi1) + (k0 - 3*k1)*(-9*a0**2*a1**3*k1*(60*k0**7 + 472*k0**6*k1 + 937*k0**5*k1**2 + 314*k0**4*k1**3 - 386*k0**3*k1**4 - 148*k0**2*k1**5 + 37*k0*k1**6 + 10*k1**7)*np.cos(2*(ang1*(k0 - 2*k1) + phi0 - 2*phi1)) + (k0 - 2*k1)*(9*a0**4*a1*k1*(30*k0**6 + 251*k0**5*k1 + 594*k0**4*k1**2 + 454*k0**3*k1**3 + 34*k0**2*k1**4 - 57*k0*k1**5 - 10*k1**6)*np.cos(4*ang1*k0 - 2*ang1*k1 + 4*phi0 - 2*phi1) + (2*k0 - k1)*(36*a0**3*(a0**2 + 2*a1**2)*k1*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1) + (3*k0 - k1)*(9*a1*(6*a0**4 + 8*a0**2*a1**2 + a1**4)*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(2*(ang1*k1 + phi1)) - a1**5*(10*k0**5 + 87*k0**4*k1 + 227*k0**3*k1**2 + 227*k0**2*k1**3 + 87*k0*k1**4 + 10*k1**5)*np.cos(6*(ang1*k1 + phi1)) + a0*k1*(72*(a0**4 + 3*a0**2*a1**2 + a1**4)*(10*k0**4 + 77*k0**3*k1 + 150*k0**2*k1**2 + 77*k0*k1**3 + 10*k1**4)*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 40*a0**2*a1**2*(10*k0**4 + 77*k0**3*k1 + 150*k0**2*k1**2 + 77*k0*k1**3 + 10*k1**4)*np.cos(3*(ang1*(k0 + k1) + phi0 + phi1)) - 9*(k0 + k1)*(5*a0**3*a1*(5*k0**3 + 36*k0**2*k1 + 57*k0*k1**2 + 10*k1**3)*np.cos(2*(ang1*(2*k0 + k1) + 2*phi0 + phi1)) + (2*k0 + k1)*(4*a0**4*(k0**2 + 7*k0*k1 + 10*k1**2)*np.cos(ang1*(5*k0 + k1) + 5*phi0 + phi1) + a1**3*(5*k0 + k1)*(5*a0*(k0 + 5*k1)*np.cos(2*(ang1*(k0 + 2*k1) + phi0 + 2*phi1)) + 4*a1*(k0 + 2*k1)*np.cos(ang1*(k0 + 5*k1) + phi0 + 5*phi1)))))))))))/(192.*k0*(k0 - 3*k1)*(k0 - 2*k1)*(2*k0 - k1)*(3*k0 - k1)*k1*(k0 + k1)*(2*k0 + k1)*(5*k0 + k1)*(k0 + 2*k1)*(k0 + 5*k1)))
             return res1 - res0
         else:
             print('invalid index j = ' + str(j) + ' in Iij')
