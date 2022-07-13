@@ -791,27 +791,21 @@ def Iij(i, j, z_matrix, ang0, ang1):
             res0 = -a0/k0 * np.cos(k0*ang0 + phi0) - a1/k1 * np.cos(k1*ang0 + phi1)
             return res1 - res0
         elif j == 2:
-            'j = 2'
-            res1_0 = (a0**2 + a1**2)/2 * ang1
-            res0_0 = (a0**2 + a1**2)/2 * ang0
-            res1_1 = -a0**2/k0 * np.sin(k0*ang1 + phi0)/2
-            res0_1 = -a0**2/k0 * np.sin(k0*ang0 + phi0)/2
-            res1_2 = -a1**2/k1 * np.sin(k1*ang1 + phi1)/2
-            res0_2 = -a1**2/k1 * np.sin(k1*ang0 + phi1)/2
-            if k0 == k1:
-                res1_3 = a0*a1*np.cos(phi0-phi1)*ang1
-                res0_3 = a0*a1*np.cos(phi0-phi1)*ang0
-            else:
-                res1_3 = a0*a1/(k0-k1) * np.sin((k0-k1)*ang1 + phi0-phi1)
-                res0_3 = a0*a1/(k0-k1) * np.sin((k0-k1)*ang0 + phi0-phi1)
-            if k0 == -k1:
-                res1_4 = -a0*a1*np.cos(phi0+phi1)*ang1
-                res0_4 = -a0*a1*np.cos(phi0+phi1)*ang0
-            else:
-                res1_4 = -a0*a1/(k0+k1) * np.sin((k0+k1)*ang1 + phi0+phi1)
-                res0_4 = -a0*a1/(k0+k1) * np.sin((k0+k1)*ang0 + phi0+phi1) 
-            res1 = res1_0 + res1_1 + res1_2 + res1_3 + res1_4
-            res0 = res0_0 + res0_1 + res0_2 + res0_3 + res0_4
+            res0 = ((a0**2*k1*(-k0**2 + k1**2)*np.sin(2*(ang0*k0 + phi0)) 
+                    + k0*(4*a0*a1*k1*(k0 + k1)
+                    *np.sin(ang0*(k0 - k1) + phi0 - phi1) 
+                    + (k0 - k1)*(-(a1**2*(k0 + k1)*np.sin(2*(ang0*k1 + phi1))) 
+                    + 2*k1*((a0**2 + a1**2)*ang0*(k0 + k1) 
+                            - 2*a0*a1*np.sin(ang0*(k0 + k1) + phi0 + phi1)))))
+                    /(4*k0*k1*(k0**2 - k1**2)))
+            
+            res1 = ((a0**2*k1*(-k0**2 + k1**2)*np.sin(2*(ang1*k0 + phi0)) 
+                    + k0*(4*a0*a1*k1*(k0 + k1)
+                    *np.sin(ang1*(k0 - k1) + phi0 - phi1) 
+                    + (k0 - k1)*(-(a1**2*(k0 + k1)*np.sin(2*(ang1*k1 + phi1))) 
+                    + 2*k1*((a0**2 + a1**2)*ang1*(k0 + k1) 
+                            - 2*a0*a1*np.sin(ang1*(k0 + k1) + phi0 + phi1)))))
+                    /(4*k0*k1*(k0**2 - k1**2)))
             return res1 - res0
         else:
             print('invalid index j = ' + str(j) + ' in Iij')
@@ -819,12 +813,13 @@ def Iij(i, j, z_matrix, ang0, ang1):
         if j == 0:
             res1 = a0/k0 * np.sin(k0*ang1 + phi0) + a1/k1 * np.sin(k1*ang1 + phi1)
             res0 = a0/k0 * np.sin(k0*ang0 + phi0) + a1/k1 * np.sin(k1*ang0 + phi1)
+
             return res1 - res0
-        elif j == 1:  
-            res1_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang1 + 2*phi0)/2
-            res1_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang1 + 2*phi1)/2
-            res0_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang0 + 2*phi0)/2
-            res0_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang0 + 2*phi1)/2
+        elif j == 1:   
+            res1_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang1 + 2*phi0)
+            res1_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang1 + 2*phi1)
+            res0_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang0 + 2*phi0)
+            res0_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang0 + 2*phi1)
             res1_3 = 0
             res0_3 = 0
             if k1==-k0:
@@ -836,7 +831,6 @@ def Iij(i, j, z_matrix, ang0, ang1):
             res0 = res0_1 + res0_2 + res0_3 + res0_4
             return res1  - res0
         elif j == 2:
-            print('j = 2')
             res1_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang1 + phi0)
             res0_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang0 + phi0)
             res1_1 = (a1**3 + 2*a0**2*a1)/k1 * np.sin(k1*ang1 + phi1)
@@ -875,23 +869,8 @@ def Iij(i, j, z_matrix, ang0, ang1):
         else:
             print('invalid index j = ' + str(j) + ' in Iij')
     elif i == 2:
-        print('i = 2')
         if j == 0:
-            res0 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang0*k0 + phi0)) 
-                    + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang0*(k0 - k1) 
-                                                        + phi0 - phi1) 
-                    + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang0*k1 + phi1)) 
-                    + 2*k1*((a0**2 + a1**2)*ang0*(k0 + k1) 
-                    + 2*a0*a1*np.sin(ang0*(k0 + k1) + phi0 + phi1)))))
-                    /(4*k0*(k0 - k1)*k1*(k0 + k1)))
-            
-            res1 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang1*k0 + phi0)) 
-                    + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang1*(k0 - k1) 
-                                                        + phi0 - phi1) 
-                    + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang1*k1 + phi1)) 
-                    + 2*k1*((a0**2 + a1**2)*ang1*(k0 + k1) 
-                    + 2*a0*a1*np.sin(ang1*(k0 + k1) + phi0 + phi1)))))
-                    /(4*k0*(k0 - k1)*k1*(k0 + k1)))
+
             return res1 - res0
         elif j == 1:
             res0 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 
@@ -983,7 +962,8 @@ def Iij(i, j, z_matrix, ang0, ang1):
                     - (16*a0*a1**3*np.cos(ang1*(k0 + k1))
                     *np.sin(2*ang1*k1 + phi0 + 3*phi1))/(k0 + 3*k1))/32)
             return res1 - res0
-        
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij')
     else:
         print('invalid index i = ' + str(i) + ' in Iij')
     
