@@ -527,7 +527,7 @@ class Deposition(QThread):
     msg_signal = pyqtSignal(str)
     debug_signal = pyqtSignal(str)
     
-    def __init__(self, rho, alpha, F, dep_dr, model, njobs=1, parent=None):
+    def __init__(self, rho, alpha, F, dep_dr, model, parent=None):
         super().__init__(parent)
         self.time = []
         n = len(rho)
@@ -537,35 +537,10 @@ class Deposition(QThread):
         self.ind = range(len(rho))
         self.alpha = alpha
         self.count = 0
-        self.njobs = njobs
-        if njobs == 1:
-            self.workers = [Worker_single(F, rho, alpha, dep_dr)]
-            self.workers[0].progress_signal.connect(self.progress)
-            self.workers[0].msg_signal.connect(self.msg)
-            self.workers[0].debug_signal.connect(self.debug)
-        else:
-            rho_p = []
-            alpha_p = []
-            if njobs>n:
-                njobs = n
-            m = n//njobs
-            if n%njobs == 0:
-                for i in range(njobs):
-                    rho_p.append(rho[i*m:(i+1)*m])
-                    alpha_p.append(alpha[i*m:(i+1)*m])
-            else:
-                k = njobs-n%njobs
-                m+=1
-                for i in range(njobs-k):
-                    rho_p.append(rho[i*m:(i+1)*m])
-                    alpha_p.append(alpha[i*m:(i+1)*m])
-                i0 = m*(njobs-k)
-                m-=1
-                for i in range(k):
-                    rho_p.append(rho[i0+i*m:i0+(i+1)*m])
-                    alpha_p.append(alpha[i0+i*m:i0+(i+1)*m])            
-                
-            self.workers = [Worker(F, rho_p[i], alpha_p[i], dep_dr) for i in range(njobs)]
+        self.workers = [Worker_single(F, rho, alpha, dep_dr)]
+        self.workers[0].progress_signal.connect(self.progress)
+        self.workers[0].msg_signal.connect(self.msg)
+        self.workers[0].debug_signal.connect(self.debug)
         
     @pyqtSlot()
     def progress(self):
@@ -588,8 +563,6 @@ class Deposition(QThread):
          self.alpha0_sub = alpha0_sub
          self.tolerance = tolerance
          self.count = 0
-         self.I_lenx = 2
-         self.I_leny = 2
          
     def xyp(self, a, i):
         x = self.R*cos(a)+self.rho[i]*cos(a*self.k + self.alpha[i])
@@ -604,56 +577,41 @@ class Deposition(QThread):
     def xy_sym(self, i):
         '''
         x(a) and y(a) in format:
-        [[a1, b1, k1, phi1], [a2, b2, k2, phi2], ...]
+        [[a1, k1, phi1], [a2, k2, phi2], ...]
         where 
         x(a) = sum_i ai*cos(ki*a + phi_i)
-        y(a) = sum_i bi*sin(ki*a + phi_i)
+        y(a) = sum_i ai*sin(ki*a + phi_i)
+        z = x + jy = sum_i ai*exp(j*(ki*a+phi_i))
         '''
-        x = np.array([[self.R, 1, 0], [self.rho[i], self.k, self.alpha[i]]]) 
-        y = np.array([[self.R, 1, 0], [self.rho[i], self.k, self.alpha[i]]]) 
-        return x, y
+        z = np.array([[self.R, 1, 0], [self.rho[i], self.k, self.alpha[i]]])
+        return z
 
     def run(self):
         t0 = time.time()
-        """
+        #"""
         R = self.R
         k = self.k
         NR = self.NR
         omega = self.omega
         alpha0_sub = self.alpha0_sub
-        point_tolerance = self.point_tolerance
-        if self.njobs == 1:
-            self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
-                                           point_tolerance)
+        point_tolerance = 0.01/100
+        self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
+                                       point_tolerance)
             
-            self.hs = self.workers[0]()
-        else:
-            hs = []
-            #result = []
-            '''
-            for worker in self.workers:
-                worker.set_properties(R, k, NR, omega, alpha0_sub,
-                                      point_tolerance)
-    
-            with Pool(processes=len(self.workers)) as pool:      
-                for worker in self.workers:
-                    a = pool.apply_async(worker)
-                    result.append(a)
-                hs = [result[i].get() for i in range(len(self.workers)) ]
-            self.hs = np.concatenate(hs)
-            '''
-        """
+        self.hs = self.workers[0]()
+        temp = self.hs
+        #"""
 
         _s = slice(self.model.spline_order, 
                    -self.model.spline_order)
         xs = self.model.F_knots[0][_s] 
         ys = self.model.F_knots[1][_s]
-        #temp = self.hs
+       
         hs = self.do(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
                      len(self.ind), self.rho, self.alpha, self.model.F_matrix,
                      self.tolerance)
         self.hs = np.array(hs)/(2*pi*self.omega)
-        #print('relative error:', np.max(np.abs((self.hs-temp)/temp)))
+        print('relative error:', np.max(np.abs((self.hs-temp)/temp)))
         t = time.time()-t0
         self.time.append(t)
         return
@@ -810,11 +768,10 @@ class Deposition(QThread):
             
             #print('integration...')
             '''integration'''
-            x_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]]) 
-            y_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]]) 
+            z_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]])  
             I = np.zeros((len(ni)))
             for j in range(I.shape[0]):
-                I[j] = integrate(F_matrix[ni[j], nj[j]], x_sym, y_sym, breaks[j], breaks[j+1])
+                I[j] = integrate(F_matrix[ni[j], nj[j]], z_sym, breaks[j], breaks[j+1])
             #print('done')
             _mask = np.zeros((max_ind))
             _mask[i] = 1
@@ -822,63 +779,221 @@ class Deposition(QThread):
         return hs
     
 @njit(cache=True)
-def Iij(i, j, x_matrix, y_matrix, ang0, ang1):
-    if j == 0:
-        if i == 0:
+def Iij(i, j, z_matrix, ang0, ang1):
+    [a0, k0, phi0], [a1, k1, phi1] = z_matrix
+    if k0 == 0 or k1 == 0:
+        print('case of zero k0 or k1 has not implemented yet')
+    elif i == 0:
+        if j == 0:
             return ang1-ang0
-        elif i == 1:
-            [b0, k0, phi0], [b1, k1, phi1] = y_matrix
-            res1 = b0/k0 * np.sin(k0*ang1 + phi0) + b1/k1 * np.sin(k1*ang1 + phi1)
-            res0 = b0/k0 * np.sin(k0*ang0 + phi0) + b1/k1 * np.sin(k1*ang0 + phi1)
-            return res1 - res0
-        else:
-            print('invalid index j = ' + str(j) + ' in Iij')
-    elif j == 1:
-        if i == 0:
-            [a0, k0, phi0], [a1, k1, phi1] = x_matrix
+        elif j == 1:
             res1 = -a0/k0 * np.cos(k0*ang1 + phi0) - a1/k1 * np.cos(k1*ang1 + phi1)
             res0 = -a0/k0 * np.cos(k0*ang0 + phi0) - a1/k1 * np.cos(k1*ang0 + phi1)
             return res1 - res0
-        elif i == 1:
-            [a0, k0, phi0], [a1, k1, phi1] = x_matrix
-            [b0, k0_b, phi0_b], [b1, k1_b, phi1_b] = y_matrix
-            if k0 != k0_b:
-                print('case of different k0 has not implemented yet')
-            if k1 != k1_b:
-                print('case of different k1 has not implemented yet')
-            if phi0 != phi0_b:
-                print('case of different phi0 has not implemented yet')
-            if phi1 != phi1_b:
-                print('case of different phi1 has not implemented yet')    
-            if k0 == 0 or k1 == 0:
-                print('case of zero k0 or k1 has not implemented yet')
+        elif j == 2:
+            'j = 2'
+            res1_0 = (a0**2 + a1**2)/2 * ang1
+            res0_0 = (a0**2 + a1**2)/2 * ang0
+            res1_1 = -a0**2/k0 * np.sin(k0*ang1 + phi0)/2
+            res0_1 = -a0**2/k0 * np.sin(k0*ang0 + phi0)/2
+            res1_2 = -a1**2/k1 * np.sin(k1*ang1 + phi1)/2
+            res0_2 = -a1**2/k1 * np.sin(k1*ang0 + phi1)/2
+            if k0 == k1:
+                res1_3 = a0*a1*np.cos(phi0-phi1)*ang1
+                res0_3 = a0*a1*np.cos(phi0-phi1)*ang0
             else:
-                res1_1 = -a0*b0/(4*k0) * np.cos(2*k0*ang1 + 2*phi0)
-                res1_2 = -a1*b1/(4*k1) * np.cos(2*k1*ang1 + 2*phi1)
-                res0_1 = -a0*b0/(4*k0) * np.cos(2*k0*ang0 + 2*phi0)
-                res0_2 = -a1*b1/(4*k1) * np.cos(2*k1*ang0 + 2*phi1)
-                if k1==k0:
-                    res1_3 = -(a1*b0-a0*b1)/2 * np.sin(phi0-phi1)*ang1
-                    res0_3 = -(a1*b0-a0*b1)/2 * np.sin(phi0-phi1)*ang0
-                else:
-                    res1_3 = (a1*b0-a0*b1)/(2*(k0-k1)) * np.cos((k0-k1)*ang1 + phi0-phi1)
-                    res0_3 = (a1*b0-a0*b1)/(2*(k0-k1)) * np.cos((k0-k1)*ang0 + phi0-phi1)
-                if k1==-k0:
-                    print('case of k0 == -k1 has not implemented yet')
-                else:
-                    res1_4 = -(a1*b0+a0*b1)/(2*(k0+k1)) * np.cos((k0+k1)*ang1 + phi0+phi1)
-                    res0_4 = -(a1*b0+a0*b1)/(2*(k0+k1)) * np.cos((k0+k1)*ang0 + phi0+phi1)
-                res1 = res1_1 + res1_2 + res1_3 + res1_4
-                res0 = res0_1 + res0_2 + res0_3 + res0_4
-                return res1  - res0
+                res1_3 = a0*a1/(k0-k1) * np.sin((k0-k1)*ang1 + phi0-phi1)
+                res0_3 = a0*a1/(k0-k1) * np.sin((k0-k1)*ang0 + phi0-phi1)
+            if k0 == -k1:
+                res1_4 = -a0*a1*np.cos(phi0+phi1)*ang1
+                res0_4 = -a0*a1*np.cos(phi0+phi1)*ang0
+            else:
+                res1_4 = -a0*a1/(k0+k1) * np.sin((k0+k1)*ang1 + phi0+phi1)
+                res0_4 = -a0*a1/(k0+k1) * np.sin((k0+k1)*ang0 + phi0+phi1) 
+            res1 = res1_0 + res1_1 + res1_2 + res1_3 + res1_4
+            res0 = res0_0 + res0_1 + res0_2 + res0_3 + res0_4
+            return res1 - res0
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij')
+    elif i == 1:
+        if j == 0:
+            res1 = a0/k0 * np.sin(k0*ang1 + phi0) + a1/k1 * np.sin(k1*ang1 + phi1)
+            res0 = a0/k0 * np.sin(k0*ang0 + phi0) + a1/k1 * np.sin(k1*ang0 + phi1)
+            return res1 - res0
+        elif j == 1:  
+            res1_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang1 + 2*phi0)/2
+            res1_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang1 + 2*phi1)/2
+            res0_1 = -a0*a0/(4*k0) * np.cos(2*k0*ang0 + 2*phi0)/2
+            res0_2 = -a1*a1/(4*k1) * np.cos(2*k1*ang0 + 2*phi1)/2
+            res1_3 = 0
+            res0_3 = 0
+            if k1==-k0:
+                print('case of k0 == -k1 has not implemented yet')
+            else:
+                res1_4 = -a1*a0/(k0+k1) * np.cos((k0+k1)*ang1 + phi0+phi1)
+                res0_4 = -a1*a0/(k0+k1) * np.cos((k0+k1)*ang0 + phi0+phi1)
+            res1 = res1_1 + res1_2 + res1_3 + res1_4
+            res0 = res0_1 + res0_2 + res0_3 + res0_4
+            return res1  - res0
+        elif j == 2:
+            print('j = 2')
+            res1_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang1 + phi0)
+            res0_0 = (a0**3 + 2*a0*a1**2)/k0 * np.sin(k0*ang0 + phi0)
+            res1_1 = (a1**3 + 2*a0**2*a1)/k1 * np.sin(k1*ang1 + phi1)
+            res0_1 = (a1**3 + 2*a0**2*a1)/k1 * np.sin(k1*ang0 + phi1)
+        
+            res1_2 = -a0**3/k0 * np.sin(3*k0*ang1 + 3*phi0)/3
+            res0_2 = -a0**3/k0 * np.sin(3*k0*ang0 + 3*phi0)/3
+            res1_3 = -a1**3/k1 * np.sin(3*k1*ang1 + 3*phi1)/3
+            res0_3 = -a1**3/k1 * np.sin(3*k1*ang0 + 3*phi1)/3
+            
+            if k0 == 2*k1:
+                print('case of k0 == 2*k1 has not implemented yet')
+            else:
+                res1_4 = a0*a1**2/(k0 - 2*k1) * np.sin((k0-2*k1)*ang1 + phi0-2*phi1)
+                res0_4 = a0*a1**2/(k0 - 2*k1) * np.sin((k0-2*k1)*ang0 + phi0-2*phi1)
+            if 2*k0 == k1:
+                print('case of 2*k0 == k1 has not implemented yet')
+            else:
+                res1_5 = a0**2*a1/(2*k0 - k1) * np.sin((2*k0-k1)*ang1 + 2*phi0-phi1)
+                res0_5 = a0**2*a1/(2*k0 - k1) * np.sin((2*k0-k1)*ang0 + 2*phi0-phi1)
+            
+            if k0 == -2*k1:
+                print('case of k0 == -2*k1 has not implemented yet')
+            else:
+                res1_6 = -3*a0*a1**2/(k0 + 2*k1) * np.sin((k0+2*k1)*ang1 + phi0+2*phi1)
+                res0_6 = -3*a0*a1**2/(k0 + 2*k1) * np.sin((k0+2*k1)*ang0 + phi0+2*phi1)
+            if 2*k0 == k1:
+                print('case of 2*k0 == k1 has not implemented yet')
+            else:
+                res1_7 = -3*a0**2*a1/(2*k0 + k1) * np.sin((2*k0+k1)*ang1 + 2*phi0+phi1)
+                res0_7 = -3*a0**2*a1/(2*k0 + k1) * np.sin((2*k0+k1)*ang0 + 2*phi0+phi1)
+            
+            res1 = res1_0 + res1_1 + res1_2 + res1_3 + res1_4 + res1_5 + res1_6 + res1_7 
+            res0 = res0_0 + res0_1 + res0_2 + res0_3 + res0_4 + res0_5 + res0_6 + res0_7
+            return (res1 - res0)/4
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij')
+    elif i == 2:
+        print('i = 2')
+        if j == 0:
+            res0 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang0*k0 + phi0)) 
+                    + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang0*(k0 - k1) 
+                                                        + phi0 - phi1) 
+                    + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang0*k1 + phi1)) 
+                    + 2*k1*((a0**2 + a1**2)*ang0*(k0 + k1) 
+                    + 2*a0*a1*np.sin(ang0*(k0 + k1) + phi0 + phi1)))))
+                    /(4*k0*(k0 - k1)*k1*(k0 + k1)))
+            
+            res1 = ((a0**2*k1*(k0**2 - k1**2)*np.sin(2*(ang1*k0 + phi0)) 
+                    + k0*(4*a0*a1*k1*(k0 + k1)*np.sin(ang1*(k0 - k1) 
+                                                        + phi0 - phi1) 
+                    + (k0 - k1)*(a1**2*(k0 + k1)*np.sin(2*(ang1*k1 + phi1)) 
+                    + 2*k1*((a0**2 + a1**2)*ang1*(k0 + k1) 
+                    + 2*a0*a1*np.sin(ang1*(k0 + k1) + phi0 + phi1)))))
+                    /(4*k0*(k0 - k1)*k1*(k0 + k1)))
+            return res1 - res0
+        elif j == 1:
+            res0 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 
+                                                 + 4*k1**4)
+                      *np.cos(ang0*k0 + phi0) 
+                      + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)
+                      *np.cos(3*(ang0*k0 + phi0)) 
+                      + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 
+                                           + 2*k1**3)
+                      *np.cos(ang0*(k0 - 2*k1) + phi0 - 2*phi1) 
+                      + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)
+                      *np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) 
+                      + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 
+                                                          + 2*k1**2)
+                      *np.cos(ang0*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 
+                                                         + 2*k1**2)
+                      *np.cos(3*(ang0*k1 + phi1)) 
+                      + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang0*(2*k0 + k1) 
+                                                         + 2*phi0 + phi1) 
+                      + a1*(2*k0 + k1)*np.cos(ang0*(k0 + 2*k1) + phi0 
+                                                + 2*phi1))))))
+                      /(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            
+            res1 = (-(3*a0*(a0**2 + 2*a1**2)*k1*(4*k0**4 - 17*k0**2*k1**2 
+                                                 + 4*k1**4)
+                      *np.cos(ang1*k0 + phi0) 
+                      + a0**3*k1*(4*k0**4 - 17*k0**2*k1**2 + 4*k1**4)
+                      *np.cos(3*(ang1*k0 + phi0)) 
+                      + a1*k0*(3*a0*a1*k1*(-4*k0**3 - 8*k0**2*k1 + k0*k1**2 
+                                           + 2*k1**3)
+                      *np.cos(ang1*(k0 - 2*k1) + phi0 - 2*phi1) 
+                      + (k0 - 2*k1)*(3*a0**2*k1*(2*k0**2 + 5*k0*k1 + 2*k1**2)
+                      *np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) 
+                      + (2*k0 - k1)*(3*(2*a0**2 + a1**2)*(2*k0**2 + 5*k0*k1 
+                                                          + 2*k1**2)
+                      *np.cos(ang1*k1 + phi1) + a1**2*(2*k0**2 + 5*k0*k1 
+                                                         + 2*k1**2)
+                      *np.cos(3*(ang1*k1 + phi1)) 
+                      + 9*a0*k1*(a0*(k0 + 2*k1)*np.cos(ang1*(2*k0 + k1) 
+                                                         + 2*phi0 + phi1) 
+                      + a1*(2*k0 + k1)*np.cos((k0 + 2*k1) + phi0 
+                                                + 2*phi1))))))
+                      /(12*(4*k0**5*k1 - 17*k0**3*k1**3 + 4*k0*k1**5)))
+            return res1 - res0
+        elif j == 2:
+            res0 = (((16*a0*a1**3*np.cos(2*ang0*k1 + phi0 + 3*phi1)
+                    *np.sin(ang0*(k0 + k1)))/(k0 + 3*k1) 
+                    - (a0**4*np.sin(4*(ang0*k0 + phi0)))/k0 
+                    + (4*a0**2*a1**2*k0*np.cos(2*ang0*k1)
+                    *np.sin(2*(ang0*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (4*a0**2*a1**2*k1*np.cos(2*ang0*k1)
+                    *np.sin(2*(ang0*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (16*a0**3*a1*np.cos(ang0*(k0 + k1))
+                    *np.sin(2*ang0*k0 + phi0 - phi1))/(k0 - k1) 
+                    - (a1**4*np.cos(4*ang0*k1)*np.sin(4*phi1))/k1 
+                    - (16*a0*a1**3*np.cos(ang0*(k0 + k1))
+                    *np.sin(2*ang0*k1 - phi0 + phi1))/(k0 - k1) 
+                    - (4*a0**2*a1**2*k0*np.cos(2*ang0*k1)
+                    *np.sin(2*(ang0*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (4*a0**2*a1**2*k1*np.cos(2*ang0*k1)
+                    *np.sin(2*(ang0*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
+                    - (8*a0**2*a1**2
+                    *np.sin(2*(ang0*(k0 + k1) + phi0 + phi1)))/(k0 + k1) 
+                    - (16*a0**3*a1*np.cos(ang0*(k0 + k1))
+                    *np.sin(2*ang0*k0 + 3*phi0 + phi1))/(3*k0 + k1) 
+                    - (16*a0*a1**3*np.cos(ang0*(k0 + k1))
+                    *np.sin(2*ang0*k1 + phi0 + 3*phi1))/(k0 + 3*k1))/32)
+            
+            res1 = (((16*a0*a1**3*np.cos(2*ang1*k1 + phi0 + 3*phi1)
+                    *np.sin(ang1*(k0 + k1)))/(k0 + 3*k1) 
+                    - (a0**4*np.sin(4*(ang1*k0 + phi0)))/k0 
+                    + (4*a0**2*a1**2*k0*np.cos(2*ang1*k1)
+                    *np.sin(2*(ang1*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (4*a0**2*a1**2*k1*np.cos(2*ang1*k1)
+                    *np.sin(2*(ang1*k0 + phi0 - phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (16*a0**3*a1*np.cos(ang1*(k0 + k1))
+                    *np.sin(2*ang1*k0 + phi0 - phi1))/(k0 - k1) 
+                    - (a1**4*np.cos(4*ang1*k1)*np.sin(4*phi1))/k1 
+                    - (16*a0*a1**3*np.cos(ang1*(k0 + k1))
+                    *np.sin(2*ang1*k1 - phi0 + phi1))/(k0 - k1) 
+                    - (4*a0**2*a1**2*k0*np.cos(2*ang1*k1)
+                    *np.sin(2*(ang1*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
+                    + (4*a0**2*a1**2*k1*np.cos(2*ang1*k1)
+                    *np.sin(2*(ang1*k0 + phi0 + phi1)))/((k0 - k1)*(k0 + k1)) 
+                    - (8*a0**2*a1**2
+                    *np.sin(2*(ang1*(k0 + k1) + phi0 + phi1)))/(k0 + k1) 
+                    - (16*a0**3*a1*np.cos(ang1*(k0 + k1))
+                    *np.sin(2*ang1*k0 + 3*phi0 + phi1))/(3*k0 + k1) 
+                    - (16*a0*a1**3*np.cos(ang1*(k0 + k1))
+                    *np.sin(2*ang1*k1 + phi0 + 3*phi1))/(k0 + 3*k1))/32)
+            return res1 - res0
+        
+    else:
+        print('invalid index i = ' + str(i) + ' in Iij')
     
 @njit(cache=True)
-def integrate(F, x, y, a0, a1): #F = F_matrix[p, q]
+def integrate(F, z, a0, a1): #F = F_matrix[p, q]
     res = 0
     for i in range(F.shape[0]):
         for j in range(F.shape[1]):
             if F[i, j] != 0:
-                res += F[i,j]*Iij(i, j, x, y, a0, a1)
+                res += F[i,j]*Iij(i, j, z, a0, a1)
     return res  
     
 class Worker:
