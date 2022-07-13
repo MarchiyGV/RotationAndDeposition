@@ -85,7 +85,7 @@ class Model(QObject):
                  NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
                  minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
                  R_min_step, k_min_step, NR_min_step, mc_iter, T, smooth, 
-                 spline_order):
+                 spline_order, debug=True):
         
         self.smooth = smooth
         self.spline_order = spline_order
@@ -336,7 +336,7 @@ class Model(QObject):
         '''    
         self.time_f = []
         self.deposition = Deposition(self.rho, self.alpha0, self.F,
-                                     self.dep_dr, self)
+                                     self.dep_dr, self, debug)
         
         self.success = True
         
@@ -527,12 +527,13 @@ class Deposition(QThread):
     msg_signal = pyqtSignal(str)
     debug_signal = pyqtSignal(str)
     
-    def __init__(self, rho, alpha, F, dep_dr, model, parent=None):
+    def __init__(self, rho, alpha, F, dep_dr, model, debug, parent=None):
         super().__init__(parent)
         self.time = []
         n = len(rho)
         self.n = n
         self.model = model
+        self.debug = debug
         self.rho = rho
         self.ind = range(len(rho))
         self.alpha = alpha
@@ -589,17 +590,18 @@ class Deposition(QThread):
     def run(self):
         t0 = time.time()
         #"""
-        R = self.R
-        k = self.k
-        NR = self.NR
-        omega = self.omega
-        alpha0_sub = self.alpha0_sub
-        point_tolerance = 0.01/100
-        self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
-                                       point_tolerance)
-            
-        self.hs = self.workers[0]()
-        temp = self.hs
+        if self.debug_flag:
+            R = self.R
+            k = self.k
+            NR = self.NR
+            omega = self.omega
+            alpha0_sub = self.alpha0_sub
+            point_tolerance = 0.01/100
+            self.workers[0].set_properties(R, k, NR, omega, alpha0_sub,
+                                           point_tolerance)
+                
+            self.hs = self.workers[0]()
+            temp = self.hs
         #"""
 
         _s = slice(self.model.spline_order, 
@@ -611,7 +613,10 @@ class Deposition(QThread):
                      len(self.ind), self.rho, self.alpha, self.model.F_matrix,
                      self.tolerance)
         self.hs = np.array(hs)/(2*pi*self.omega)
-        print('relative error:', np.max(np.abs((self.hs-temp)/temp)))
+        if self.debug_flag:
+            s = f'relative error: {np.max(np.abs((self.hs-temp)/temp))}'
+            self.msg(s)
+            print(s)
         t = time.time()-t0
         self.time.append(t)
         return

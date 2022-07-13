@@ -19,7 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib import pyplot as plt
 from numpy import (array, multiply, log10, mean, min)
 import os
-from multiprocessing import freeze_support
+import sys
 
 
 import design
@@ -195,7 +195,7 @@ class App(QMainWindow, design.Ui_MainWindow):
     @pyqtSlot()    
     def set_settings(self):
         sender = self.sender()
-        d = {'tolerance_edit': 'point_tolerance', 
+        d = {'tolerance_edit': 'tolerance', 
              'sub_res_edit':  'substrate_res'}
         varname = d[sender.objectName()]
         value = sender.text()
@@ -282,6 +282,12 @@ class App(QMainWindow, design.Ui_MainWindow):
     def update_settings(self, fname):
         try:
             self.settings = Settings.open_file(fname)
+        except ImportError as e:
+            self.error(str(e))
+            sys.exit()
+        except ValueError as e:
+            self.error(str(e))
+            sys.exit()
         except:
             self.error('Неверный формат файла с настройками')
             return False
@@ -802,6 +808,4 @@ def main():
     sys.exit(app.exec_())
         
 if __name__ == '__main__': 
-    freeze_support()
-    import sys
     main()

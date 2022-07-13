@@ -14,6 +14,8 @@ import re
 import os
 from numpy import array, nan
 import numpy as np
+import ntpath
+
 
 class Settings(QAbstractTableModel):
     
@@ -43,6 +45,12 @@ class Settings(QAbstractTableModel):
                     self.data[i, self.index_value] = True
                 elif val == 'False' or val == 0:
                     self.data[i, self.index_value] = False
+            if self.data[i,self.index_type] == 'filename':
+                val = self.data[i, self.index_value]
+                if os.path.exists(val):
+                    self.data[i, self.index_value] = val
+                else:
+                    raise ValueError(f'Reading setting file: path {val} does not exist')
             for j in range(self.data.shape[1]):
                 if self.data[i,j] is nan:
                     self.data[i,j] = ''
@@ -191,11 +199,7 @@ class Settings(QAbstractTableModel):
                 except: pass
         elif value_type == 'filename':
             value = str(value)
-            t = re.match('.+\\..+', value)
-            if t:
-                value = t.group(0)
-            else: 
-                flag = False
+            flag = os.path.exists(value)
         else:
             flag = False
         return value, flag 
