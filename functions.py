@@ -339,7 +339,6 @@ class Model(QObject):
                                      self.dep_dr, self, debug)
         
         self.success = True
-        print('ok')
         
     @staticmethod
     @njit(cache=True)
@@ -529,9 +528,7 @@ class Deposition(QThread):
     debug_signal = pyqtSignal(str)
     
     def __init__(self, rho, alpha, F, dep_dr, model, debug, parent=None):
-        
         super().__init__(parent)
-        
         self.time = []
         n = len(rho)
         self.n = n
@@ -545,7 +542,6 @@ class Deposition(QThread):
         self.workers[0].progress_signal.connect(self.progress)
         self.workers[0].msg_signal.connect(self.msg)
         self.workers[0].debug_signal.connect(self.debug)
-        print('dep')
         
     @pyqtSlot()
     def progress(self):
