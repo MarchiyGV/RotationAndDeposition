@@ -608,10 +608,20 @@ class Deposition(QThread):
                    -self.model.spline_order)
         xs = self.model.F_knots[0][_s] 
         ys = self.model.F_knots[1][_s]
-       
+        '''
         hs = self.do(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
                      len(self.ind), self.rho, self.alpha, self.model.F_matrix,
                      self.tolerance)
+        '''
+        n = np.array([3, 0, 1])
+        H = 50
+        x0 = -100
+        y0 = 0
+        print('calc curvature...')
+        hs = self.do_c(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
+                     len(self.ind), self.rho, self.alpha, self.model.F_matrix,
+                     self.tolerance, n, x0, y0, H)
+        #print('curvature error: ', np.max(np.abs(hs_c-hs))/np.mean(hs))
         self.hs = np.array(hs)/(2*pi*self.omega)
         if self.debug_flag:
             s = f'relative error: {np.max(np.abs((self.hs-temp)/temp))}'
@@ -622,9 +632,9 @@ class Deposition(QThread):
         return
     
     @staticmethod
-    @njit(parallel=True, cache=True)
-    def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix, 
-           tolerance):
+    @njit(parallel=False, cache=True)
+    def do_c(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix, 
+           tolerance, n, x0, y0, H):
         hs = np.zeros((max_ind))
         dx = np.min(np.diff(xs))
         dy = np.min(np.diff(ys))
@@ -632,6 +642,7 @@ class Deposition(QThread):
         #tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
         xtol = tolerance * dx
         ytol = tolerance * dy
+        ktol = 0.001
         a = alpha0_sub
         a1 = alpha0_sub + NR*2*pi
         for i in prange(max_ind):
@@ -772,6 +783,279 @@ class Deposition(QThread):
             #print('done')
             
             #print('integration...')
+            '''searching of shade intervals '''
+            z_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]]) 
+            nx, ny, nz = n
+            [az0, k0, phi0], [az1, k1, phi1] = z_sym
+            max_dK_da = az0*abs(k0 - k1) + abs(k1*ny*x0) + abs(k1*nx*y0) + abs(az0*(k0 - k1)*nx) + abs(k1*(nx*x0 + ny*y0))
+            da = (0.01/max_dK_da)
+            num = ceil((a1-a)/da)+1
+            ang = np.linspace(a, a1, num)
+            K_flag = True
+            breaks_K_a = np.empty(ang.shape)
+            breaks_K_b = np.empty(ang.shape)
+            len_breaks_K_a = 0
+            len_breaks_K_b = 0
+            for j, aa in enumerate(ang):
+                K_val = K(z_sym, n, x0, y0, H, aa)
+                
+                if K_val >= 0:
+                    if K_flag:
+                        #print('-+ a, k:', aa, k)
+                        K_flag = False
+                        if j == 0:
+                            a_mid = aa
+                        else:
+                            '''bisection'''
+                            a_pre = ang[j-1]
+                            a_cur = aa
+                            
+                            K_pre = K(z_sym, n, x0, y0, H, a_pre)
+                            K_cur = K_val
+                            a_mid = (a_pre*K_cur - a_cur*K_pre)/(-K_pre + K_cur)
+    
+                            K_val = K(z_sym, n, x0, y0, H, a_mid)
+                            while abs(K_val)>ktol:
+                                #print(k)
+                                if K_val > 0: 
+                                    a_cur = a_mid
+                                    K_cur = K_val
+                                else:
+                                    a_pre = a_mid
+                                    K_pre = K_val
+                                
+                                a_mid = (a_pre*K_cur - a_cur*K_pre)/(-K_pre + K_cur)
+                                K_val = K(z_sym, n, x0, y0, H, a_mid)
+                            '''end'''
+                        breaks_K_a[len_breaks_K_a] = a_mid
+                        len_breaks_K_a += 1
+                elif not K_flag:
+                    #print('+- a, k:', aa, k)
+                    K_flag = True
+                    '''bisection'''
+                    a_pre = ang[j-1]
+                    a_cur = aa
+                    
+                    K_pre = K(z_sym, n, x0, y0, H, a_pre)
+                    K_cur = K_val
+                    a_mid = (-a_pre*K_cur + a_cur*K_pre)/(K_pre - K_cur)
+                    K_val = K(z_sym, n, x0, y0, H, a_mid)
+                    while abs(K_val)>ktol:
+                        #print()
+                        if K_val > 0: 
+                            a_pre = a_mid
+                            K_pre = K_val
+                        else:
+                            a_cur = a_mid
+                            K_cur = K_val
+                        
+                        a_mid = (-a_pre*K_cur + a_cur*K_pre)/(K_pre - K_cur)
+                        K_val = K(z_sym, n, x0, y0, H, a_mid)
+                    '''end'''
+                    breaks_K_b[len_breaks_K_b] = a_mid
+                    len_breaks_K_b += 1
+                
+            if len_breaks_K_b == len_breaks_K_a - 1:
+                breaks_K_b[len_breaks_K_a-1] = a1
+                
+            breaks_K_a = breaks_K_a[:len_breaks_K_a]
+            breaks_K_b = breaks_K_b[:len_breaks_K_a]
+            print('intervals without shading:', breaks_K_a, breaks_K_b)
+            '''integration'''
+            I = np.zeros((len(ni)))
+            for j in range(I.shape[0]):
+                interval_flag = False
+                for l in range(len_breaks_K_a):
+                    if (breaks[j] >= breaks_K_a[l]) and \
+                    (breaks[j+1] <= breaks_K_b[l]):
+                        aj = breaks[j]
+                        bj = breaks[j+1]
+                        interval_flag = True
+                        break
+                    elif (breaks[j] <= breaks_K_a[l]) and \
+                    (breaks[j+1] >= breaks_K_a[l]):
+                        aj = breaks_K_a[l]
+                        if (breaks[j+1] <= breaks_K_b[l]):
+                            bj = breaks[j+1]
+                            interval_flag = True
+                            break
+                        else:
+                            bj = breaks_K_b[l]
+                            interval_flag = True
+                            break
+                    elif (breaks[j] <= breaks_K_b[l]) and \
+                    (breaks[j+1] >= breaks_K_b[l]):
+                        bj = breaks_K_b[l]
+                        if (breaks[j] <= breaks_K_a[l]):
+                            aj = breaks_K_a[l]
+                            interval_flag = True
+                            break
+                        else:
+                            aj = breaks[j]
+                            interval_flag = True
+                            break
+                if interval_flag:
+                    I[j] = integrate_c(F_matrix[ni[j], nj[j]], z_sym, aj, bj,
+                                       n, x0, y0, H)
+                else:
+                    I[j] = 0
+            #print('done')
+            _mask = np.zeros((max_ind))
+            _mask[i] = 1
+            hs += _mask*(np.sum(np.sort(I)))
+        return hs/(H*np.sqrt(nx*nx+ny*ny+nz*nz))
+    
+    @staticmethod
+    @njit(parallel=True, cache=True)
+    def do(R, k, NR, alpha0_sub, xs, ys, max_ind, rho, alpha, F_matrix, 
+           tolerance):
+        hs = np.zeros((max_ind))
+        dx = np.min(np.diff(xs))
+        dy = np.min(np.diff(ys))
+        n_points_per_interval = 3 #how many points should be in each alpha interval
+        #tolerance = 1e-3 # x(breaks[i])-xs[i] < tolerance * dx (or y)
+        xtol = tolerance * dx
+        ytol = tolerance * dy
+        a = alpha0_sub
+        a1 = alpha0_sub + NR*2*pi
+        for i in prange(max_ind):
+            #print('finding edges...')
+            x = R*cos(a) + rho[i]*cos(a*k + alpha[i])
+            y = R*sin(a) + rho[i]*sin(a*k + alpha[i])
+            
+            '''x'''
+            max_dxy_da = R+rho[i]*k # dx/da, dy/da <= R+rho*k
+            da = (dx/max_dxy_da) / n_points_per_interval
+            num = ceil((a1-a)/da)+1
+            ang = np.linspace(a, a1, num)
+            p =  np.sum(xs<=x)-1
+            breaks_x = np.zeros((len(ang)))
+            ni0 = np.zeros((len(ang)+1))
+            ni0[0] = p
+            len_breaks_x = 0
+            
+            for j, aa in enumerate(ang):
+                x = R*cos(aa) + rho[i]*cos(aa*k + alpha[i])
+                p1 = np.sum(xs<=x)-1
+                if abs(p1-p)==1:
+                    if p1>p:
+                        c = 1
+                        a_pre = aa
+                        a_cur = ang[j-1]
+                        x_pre = x
+                        x_cur = R*cos(a_cur) + rho[i]*cos(a_cur*k + alpha[i])
+                    else:
+                        c = 0
+                        a_pre = ang[j-1]
+                        a_cur = aa
+                        x_pre = R*cos(a_pre) + rho[i]*cos(a_pre*k + alpha[i])
+                        x_cur = x
+                        
+                    x0 = xs[p+c]
+            
+                    a_mid = (a_pre*(x0-x_cur) + a_cur*(x_pre-x0))/(x_pre - x_cur)
+
+                    x = R*cos(a_mid) + rho[i]*cos(a_mid*k + alpha[i])
+                    while abs(x-x0)>xtol:
+                        #print('dx', x-x0)
+                        if x-x0 > 0:
+                            a_pre = a_mid
+                            x_pre = x
+                        else:
+                            a_cur = a_mid
+                            x_cur = x
+                        
+                        a_mid = (a_pre*(x0-x_cur) + a_cur*(x_pre-x0))/(x_pre - x_cur)
+                        x = R*cos(a_mid) + rho[i]*cos(a_mid*k + alpha[i])
+                        
+                    breaks_x[len_breaks_x] = a_mid
+                    ni0[len_breaks_x+1] = p1
+                    len_breaks_x += 1
+                    p = p1
+                elif abs(p1-p)>1:
+                    print('finding edges: angle step for x is too big!')
+                    
+            breaks_x = breaks_x[:len_breaks_x]
+            ni0 = ni0[:len_breaks_x+1]
+            
+            '''y'''
+            da = (dy/max_dxy_da) / n_points_per_interval
+            num = ceil((a1-a)/da)+1
+            ang = np.linspace(a, a1, num)
+            q = np.sum(ys<=y)-1
+            breaks_y = np.zeros((len(ang)))
+            nj0 = np.zeros((len(ang)+1))
+            len_breaks_y = 0
+            nj0[0] = q
+            
+            for j, aa in enumerate(ang):
+                y = R*sin(aa) + rho[i]*sin(aa*k + alpha[i])
+                q1 = np.sum(ys<=y)-1
+                if abs(q1-q)==1:
+                    if q1>q:
+                        c = 1
+                        a_pre = aa
+                        a_cur = ang[j-1]
+                        y_pre = y
+                        y_cur = R*sin(a_cur) + rho[i]*sin(a_cur*k + alpha[i])
+                    else:
+                        c = 0
+                        a_pre = ang[j-1]
+                        a_cur = aa
+                        y_pre = R*sin(a_pre) + rho[i]*sin(a_pre*k + alpha[i])
+                        y_cur = y
+                        
+                        
+                    y0 = ys[q+c]
+                    
+                    a_mid = (a_pre*(y0-y_cur) + a_cur*(y_pre-y0))/(y_pre - y_cur)
+
+                    y = R*sin(a_mid) + rho[i]*sin(a_mid*k + alpha[i])
+                    while abs(y-y0)>ytol:
+                        #print('dy', y-y0)
+                        if y-y0 > 0: 
+                            a_pre = a_mid
+                            y_pre = y
+                        else:
+                            a_cur = a_mid
+                            y_cur = y
+                        
+                        a_mid = (a_pre*(y0-y_cur) + a_cur*(y_pre-y0))/(y_pre - y_cur)
+                        y = R*sin(a_mid) + rho[i]*sin(a_mid*k + alpha[i])
+                        
+                    breaks_y[len_breaks_y] = a_mid
+                    nj0[len_breaks_y+1] = q1
+                    len_breaks_y += 1
+                    q = q1
+                elif abs(q1-q)>1:
+                    print('finding edges: angle step for y is too big!')
+                
+                                    
+            breaks_y = breaks_y[:len_breaks_y]
+            nj0 = nj0[:len_breaks_y+1]
+                
+            '''combining'''
+            breaks = np.concatenate((np.array([a]), breaks_x, breaks_y))
+            ni = np.empty((breaks.shape[0]), dtype=np.int64)
+            x = R*cos(a) + rho[i]*cos(a*k + alpha[i])
+            y = R*sin(a) + rho[i]*sin(a*k + alpha[i])
+            ni[0] = np.sum(xs<=x)-1
+            nj = np.empty((breaks.shape[0]), dtype=np.int64)
+            nj[0] = np.sum(ys<=y)-1
+            ind = np.argsort(breaks)
+            for ki in range(1, breaks.shape[0]):
+                if ind[ki]<1+len(breaks_x):
+                    ni[ki] = ni0[ind[ki]]#заменить на ind[ki]
+                    nj[ki] = nj[ki-1]
+                else:
+                    ni[ki] = ni[ki-1]
+                    nj[ki] = nj0[ind[ki]-len(breaks_x)]
+            #print(ni, nj, ni0, nj0)
+            breaks = np.concatenate((breaks[ind], np.array([a1])))
+            #print('done')
+            
+            #print('integration...')
+            
             '''integration'''
             z_sym = np.array([[R, 1, 0], [rho[i], k, alpha[i]]])  
             I = np.zeros((len(ni)))
@@ -782,6 +1066,58 @@ class Deposition(QThread):
             _mask[i] = 1
             hs += _mask*(np.sum(np.sort(I)))
         return hs
+  
+@njit(cache=True)  
+def K(z_matrix, n, x0, y0, H, a):
+    nx, ny, nz = n
+    [a0, k0, phi0], [a1, k1, phi1] = z_matrix
+    k_arg = a1*nx + H*nz + a0*nx*np.cos(a*(k0 - k1) + phi0 - phi1) + (nx*x0 + ny*y0)*np.cos(a*k1 + phi1) + a0*ny*np.sin(a*k0 - a*k1 + phi0 - phi1) - ny*x0*np.sin(a*k1 + phi1) + nx*y0*np.sin(a*k1 + phi1)
+    k = k_arg/(H*np.sqrt(nx*nx+ny*ny+nz*nz))
+    return k
+
+@njit(cache=True)
+def integrate_c(F, z, a0, a1, n, x0, y0, H): #F = F_matrix[p, q]
+    res = 0
+    for i in range(F.shape[0]):
+        for j in range(F.shape[1]):
+            if F[i, j] != 0:
+                res += F[i,j]*Iij_c(i, j, z, a0, a1, n, x0, y0, H)
+    return res  
+
+@njit(cache=True)
+def Iij_c(i, j, z_matrix, ang0, ang1, n, x0, y0, H):
+    [a0, k0, phi0], [a1, k1, phi1] = z_matrix
+    nx, ny, nz = n
+    if k0 == 0 or k1 == 0:
+        print('case of zero k0 or k1 has not implemented yet')
+        return 0.0
+    elif i == 0:
+        if j == 0:
+            res0 = ((a1*ang0*k0*k1*nx - a1*ang0*k1**2*nx + ang0*H*k0*k1*nz - ang0*H*k1**2*nz - a0*k1*ny*np.cos(ang0*(k0 - k1) + phi0 - phi1) + (k0 - k1)*(ny*x0 - nx*y0)*np.cos(ang0*k1 + phi1) + a0*k1*nx*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + k0*nx*x0*np.sin(ang0*k1 + phi1) - k1*nx*x0*np.sin(ang0*k1 + phi1) + k0*ny*y0*np.sin(ang0*k1 + phi1) - k1*ny*y0*np.sin(ang0*k1 + phi1))/((k0 - k1)*k1))
+            res1 = ((a1*ang1*k0*k1*nx - a1*ang1*k1**2*nx + ang1*H*k0*k1*nz - ang1*H*k1**2*nz - a0*k1*ny*np.cos(ang1*(k0 - k1) + phi0 - phi1) + (k0 - k1)*(ny*x0 - nx*y0)*np.cos(ang1*k1 + phi1) + a0*k1*nx*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + k0*nx*x0*np.sin(ang1*k1 + phi1) - k1*nx*x0*np.sin(ang1*k1 + phi1) + k0*ny*y0*np.sin(ang1*k1 + phi1) - k1*ny*y0*np.sin(ang1*k1 + phi1))/((k0 - k1)*k1))
+            return res1 - res0
+        elif j == 1:
+            res0 = ((-4*a1*ang0*k0**5*k1*ny*x0 + 10*a1*ang0*k0**4*k1**2*ny*x0 - 10*a1*ang0*k0**2*k1**4*ny*x0 + 4*a1*ang0*k0*k1**5*ny*x0 + 4*a1*ang0*k0**5*k1*nx*y0 - 10*a1*ang0*k0**4*k1**2*nx*y0 + 10*a1*ang0*k0**2*k1**4*nx*y0 - 4*a1*ang0*k0*k1**5*nx*y0 + 2*a0*k1*(-2*k0**4 + 5*k0**3*k1 - 5*k0*k1**3 + 2*k1**4)*(3*a1*nx + 2*H*nz)*np.cos(ang0*k0 + phi0) + 2*a0*a1*k0*k1*(2*k0**3 - k0**2*k1 - 2*k0*k1**2 + k1**3)*nx*np.cos(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*nx*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*nx*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*nx*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 4*a0*k0*k1**4*nx*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 4*a0*k0**4*k1*ny*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*nx*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*nx*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*nx*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*nx*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 4*a0**2*k0**5*nx*np.cos(ang0*k1 + phi1) - 8*a1**2*k0**5*nx*np.cos(ang0*k1 + phi1) + 10*a0**2*k0**4*k1*nx*np.cos(ang0*k1 + phi1) + 20*a1**2*k0**4*k1*nx*np.cos(ang0*k1 + phi1) - 10*a0**2*k0**2*k1**3*nx*np.cos(ang0*k1 + phi1) - 20*a1**2*k0**2*k1**3*nx*np.cos(ang0*k1 + phi1) + 4*a0**2*k0*k1**4*nx*np.cos(ang0*k1 + phi1) + 8*a1**2*k0*k1**4*nx*np.cos(ang0*k1 + phi1) - 8*a1*H*k0**5*nz*np.cos(ang0*k1 + phi1) + 20*a1*H*k0**4*k1*nz*np.cos(ang0*k1 + phi1) - 20*a1*H*k0**2*k1**3*nz*np.cos(ang0*k1 + phi1) + 8*a1*H*k0*k1**4*nz*np.cos(ang0*k1 + phi1) - 2*a1*k0**5*nx*x0*np.cos(2*(ang0*k1 + phi1)) + 5*a1*k0**4*k1*nx*x0*np.cos(2*(ang0*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*x0*np.cos(2*(ang0*k1 + phi1)) + 2*a1*k0*k1**4*nx*x0*np.cos(2*(ang0*k1 + phi1)) - 2*a1*k0**5*ny*y0*np.cos(2*(ang0*k1 + phi1)) + 5*a1*k0**4*k1*ny*y0*np.cos(2*(ang0*k1 + phi1)) - 5*a1*k0**2*k1**3*ny*y0*np.cos(2*(ang0*k1 + phi1)) + 2*a1*k0*k1**4*ny*y0*np.cos(2*(ang0*k1 + phi1)) - 4*a0*k0**4*k1*nx*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*ny*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*ny*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*ny*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*ny*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*a1*k0**4*k1*ny*np.sin(ang0*k0 + phi0) + 10*a0*a1*k0**3*k1**2*ny*np.sin(ang0*k0 + phi0) - 10*a0*a1*k0*k1**4*ny*np.sin(ang0*k0 + phi0) + 4*a0*a1*k1**5*ny*np.sin(ang0*k0 + phi0) + 4*a0*a1*k0**4*k1*ny*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 2*a0*a1*k0**3*k1**2*ny*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 4*a0*a1*k0**2*k1**3*ny*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) + 2*a0*a1*k0*k1**4*ny*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*ny*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0**4*k1*nx*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*ny*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*ny*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*ny*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*ny*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*ny*np.sin(ang0*k1 + phi1) - 10*a0**2*k0**4*k1*ny*np.sin(ang0*k1 + phi1) + 10*a0**2*k0**2*k1**3*ny*np.sin(ang0*k1 + phi1) - 4*a0**2*k0*k1**4*ny*np.sin(ang0*k1 + phi1) + 2*a1*k0**5*ny*x0*np.sin(2*(ang0*k1 + phi1)) - 5*a1*k0**4*k1*ny*x0*np.sin(2*(ang0*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*x0*np.sin(2*(ang0*k1 + phi1)) - 2*a1*k0*k1**4*ny*x0*np.sin(2*(ang0*k1 + phi1)) - 2*a1*k0**5*nx*y0*np.sin(2*(ang0*k1 + phi1)) + 5*a1*k0**4*k1*nx*y0*np.sin(2*(ang0*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*y0*np.sin(2*(ang0*k1 + phi1)) + 2*a1*k0*k1**4*nx*y0*np.sin(2*(ang0*k1 + phi1)) + 4*a0*k0**4*k1*ny*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*nx*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1))/(4.*k0*(k0 - 2*k1)*(k0 - k1)*(2*k0 - k1)*k1*(k0 + k1)))
+            res1 = ((-4*a1*ang1*k0**5*k1*ny*x0 + 10*a1*ang1*k0**4*k1**2*ny*x0 - 10*a1*ang1*k0**2*k1**4*ny*x0 + 4*a1*ang1*k0*k1**5*ny*x0 + 4*a1*ang1*k0**5*k1*nx*y0 - 10*a1*ang1*k0**4*k1**2*nx*y0 + 10*a1*ang1*k0**2*k1**4*nx*y0 - 4*a1*ang1*k0*k1**5*nx*y0 + 2*a0*k1*(-2*k0**4 + 5*k0**3*k1 - 5*k0*k1**3 + 2*k1**4)*(3*a1*nx + 2*H*nz)*np.cos(ang1*k0 + phi0) + 2*a0*a1*k0*k1*(2*k0**3 - k0**2*k1 - 2*k0*k1**2 + k1**3)*nx*np.cos(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*nx*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*nx*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*nx*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 4*a0*k0*k1**4*nx*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 4*a0*k0**4*k1*ny*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*nx*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*nx*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*nx*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*nx*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 4*a0**2*k0**5*nx*np.cos(ang1*k1 + phi1) - 8*a1**2*k0**5*nx*np.cos(ang1*k1 + phi1) + 10*a0**2*k0**4*k1*nx*np.cos(ang1*k1 + phi1) + 20*a1**2*k0**4*k1*nx*np.cos(ang1*k1 + phi1) - 10*a0**2*k0**2*k1**3*nx*np.cos(ang1*k1 + phi1) - 20*a1**2*k0**2*k1**3*nx*np.cos(ang1*k1 + phi1) + 4*a0**2*k0*k1**4*nx*np.cos(ang1*k1 + phi1) + 8*a1**2*k0*k1**4*nx*np.cos(ang1*k1 + phi1) - 8*a1*H*k0**5*nz*np.cos(ang1*k1 + phi1) + 20*a1*H*k0**4*k1*nz*np.cos(ang1*k1 + phi1) - 20*a1*H*k0**2*k1**3*nz*np.cos(ang1*k1 + phi1) + 8*a1*H*k0*k1**4*nz*np.cos(ang1*k1 + phi1) - 2*a1*k0**5*nx*x0*np.cos(2*(ang1*k1 + phi1)) + 5*a1*k0**4*k1*nx*x0*np.cos(2*(ang1*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*x0*np.cos(2*(ang1*k1 + phi1)) + 2*a1*k0*k1**4*nx*x0*np.cos(2*(ang1*k1 + phi1)) - 2*a1*k0**5*ny*y0*np.cos(2*(ang1*k1 + phi1)) + 5*a1*k0**4*k1*ny*y0*np.cos(2*(ang1*k1 + phi1)) - 5*a1*k0**2*k1**3*ny*y0*np.cos(2*(ang1*k1 + phi1)) + 2*a1*k0*k1**4*ny*y0*np.cos(2*(ang1*k1 + phi1)) - 4*a0*k0**4*k1*nx*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*ny*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*ny*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*ny*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*ny*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*a1*k0**4*k1*ny*np.sin(ang1*k0 + phi0) + 10*a0*a1*k0**3*k1**2*ny*np.sin(ang1*k0 + phi0) - 10*a0*a1*k0*k1**4*ny*np.sin(ang1*k0 + phi0) + 4*a0*a1*k1**5*ny*np.sin(ang1*k0 + phi0) + 4*a0*a1*k0**4*k1*ny*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 2*a0*a1*k0**3*k1**2*ny*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 4*a0*a1*k0**2*k1**3*ny*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) + 2*a0*a1*k0*k1**4*ny*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*ny*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0**4*k1*nx*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*ny*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*ny*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*ny*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*ny*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*ny*np.sin(ang1*k1 + phi1) - 10*a0**2*k0**4*k1*ny*np.sin(ang1*k1 + phi1) + 10*a0**2*k0**2*k1**3*ny*np.sin(ang1*k1 + phi1) - 4*a0**2*k0*k1**4*ny*np.sin(ang1*k1 + phi1) + 2*a1*k0**5*ny*x0*np.sin(2*(ang1*k1 + phi1)) - 5*a1*k0**4*k1*ny*x0*np.sin(2*(ang1*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*x0*np.sin(2*(ang1*k1 + phi1)) - 2*a1*k0*k1**4*ny*x0*np.sin(2*(ang1*k1 + phi1)) - 2*a1*k0**5*nx*y0*np.sin(2*(ang1*k1 + phi1)) + 5*a1*k0**4*k1*nx*y0*np.sin(2*(ang1*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*y0*np.sin(2*(ang1*k1 + phi1)) + 2*a1*k0*k1**4*nx*y0*np.sin(2*(ang1*k1 + phi1)) + 4*a0*k0**4*k1*ny*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*nx*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1))/(4.*k0*(k0 - 2*k1)*(k0 - k1)*(2*k0 - k1)*k1*(k0 + k1)))
+            return res1 - res0
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij_c')
+            return 0.0
+    elif i == 1:
+        if j == 0:
+            res0 = ((4*a1*ang0*k0**5*k1*nx*x0 - 10*a1*ang0*k0**4*k1**2*nx*x0 + 10*a1*ang0*k0**2*k1**4*nx*x0 - 4*a1*ang0*k0*k1**5*nx*x0 + 4*a1*ang0*k0**5*k1*ny*y0 - 10*a1*ang0*k0**4*k1**2*ny*y0 + 10*a1*ang0*k0**2*k1**4*ny*y0 - 4*a1*ang0*k0*k1**5*ny*y0 + 2*a0*a1*k1*(-2*k0**4 + 5*k0**3*k1 - 5*k0*k1**3 + 2*k1**4)*ny*np.cos(ang0*k0 + phi0) - 2*a0*a1*k0*k1*(2*k0**3 - k0**2*k1 - 2*k0*k1**2 + k1**3)*ny*np.cos(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*ny*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*x0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0**4*k1*nx*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*y0*np.cos(ang0*k0 - ang0*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*ny*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*ny*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*ny*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*ny*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*ny*np.cos(ang0*k1 + phi1) - 10*a0**2*k0**4*k1*ny*np.cos(ang0*k1 + phi1) + 10*a0**2*k0**2*k1**3*ny*np.cos(ang0*k1 + phi1) - 4*a0**2*k0*k1**4*ny*np.cos(ang0*k1 + phi1) + 2*a1*k0**5*ny*x0*np.cos(2*(ang0*k1 + phi1)) - 5*a1*k0**4*k1*ny*x0*np.cos(2*(ang0*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*x0*np.cos(2*(ang0*k1 + phi1)) - 2*a1*k0*k1**4*ny*x0*np.cos(2*(ang0*k1 + phi1)) - 2*a1*k0**5*nx*y0*np.cos(2*(ang0*k1 + phi1)) + 5*a1*k0**4*k1*nx*y0*np.cos(2*(ang0*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*y0*np.cos(2*(ang0*k1 + phi1)) + 2*a1*k0*k1**4*nx*y0*np.cos(2*(ang0*k1 + phi1)) + 4*a0*k0**4*k1*ny*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*x0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*nx*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*y0*np.cos(ang0*(k0 + k1) + phi0 + phi1) + 12*a0*a1*k0**4*k1*nx*np.sin(ang0*k0 + phi0) - 30*a0*a1*k0**3*k1**2*nx*np.sin(ang0*k0 + phi0) + 30*a0*a1*k0*k1**4*nx*np.sin(ang0*k0 + phi0) - 12*a0*a1*k1**5*nx*np.sin(ang0*k0 + phi0) + 8*a0*H*k0**4*k1*nz*np.sin(ang0*k0 + phi0) - 20*a0*H*k0**3*k1**2*nz*np.sin(ang0*k0 + phi0) + 20*a0*H*k0*k1**4*nz*np.sin(ang0*k0 + phi0) - 8*a0*H*k1**5*nz*np.sin(ang0*k0 + phi0) + 4*a0*a1*k0**4*k1*nx*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 2*a0*a1*k0**3*k1**2*nx*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) - 4*a0*a1*k0**2*k1**3*nx*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) + 2*a0*a1*k0*k1**4*nx*np.sin(ang0*k0 - 2*ang0*k1 + phi0 - 2*phi1) + 4*a0*k0**4*k1*nx*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*x0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0**4*k1*ny*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*ny*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*ny*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 4*a0*k0*k1**4*ny*y0*np.sin(ang0*k0 - ang0*k1 + phi0 - phi1) + 2*a0**2*k0**4*k1*nx*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 4*a0**2*k0**3*k1**2*nx*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) - 2*a0**2*k0**2*k1**3*nx*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0*k1**4*nx*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*nx*np.sin(ang0*k1 + phi1) + 8*a1**2*k0**5*nx*np.sin(ang0*k1 + phi1) - 10*a0**2*k0**4*k1*nx*np.sin(ang0*k1 + phi1) - 20*a1**2*k0**4*k1*nx*np.sin(ang0*k1 + phi1) + 10*a0**2*k0**2*k1**3*nx*np.sin(ang0*k1 + phi1) + 20*a1**2*k0**2*k1**3*nx*np.sin(ang0*k1 + phi1) - 4*a0**2*k0*k1**4*nx*np.sin(ang0*k1 + phi1) - 8*a1**2*k0*k1**4*nx*np.sin(ang0*k1 + phi1) + 8*a1*H*k0**5*nz*np.sin(ang0*k1 + phi1) - 20*a1*H*k0**4*k1*nz*np.sin(ang0*k1 + phi1) + 20*a1*H*k0**2*k1**3*nz*np.sin(ang0*k1 + phi1) - 8*a1*H*k0*k1**4*nz*np.sin(ang0*k1 + phi1) + 2*a1*k0**5*nx*x0*np.sin(2*(ang0*k1 + phi1)) - 5*a1*k0**4*k1*nx*x0*np.sin(2*(ang0*k1 + phi1)) + 5*a1*k0**2*k1**3*nx*x0*np.sin(2*(ang0*k1 + phi1)) - 2*a1*k0*k1**4*nx*x0*np.sin(2*(ang0*k1 + phi1)) + 2*a1*k0**5*ny*y0*np.sin(2*(ang0*k1 + phi1)) - 5*a1*k0**4*k1*ny*y0*np.sin(2*(ang0*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*y0*np.sin(2*(ang0*k1 + phi1)) - 2*a1*k0*k1**4*ny*y0*np.sin(2*(ang0*k1 + phi1)) + 4*a0*k0**4*k1*nx*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*nx*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*nx*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*nx*x0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 4*a0*k0**4*k1*ny*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*y0*np.sin(ang0*(k0 + k1) + phi0 + phi1))/(4.*k0*(k0 - 2*k1)*(k0 - k1)*(2*k0 - k1)*k1*(k0 + k1)))
+            res1 = ((4*a1*ang1*k0**5*k1*nx*x0 - 10*a1*ang1*k0**4*k1**2*nx*x0 + 10*a1*ang1*k0**2*k1**4*nx*x0 - 4*a1*ang1*k0*k1**5*nx*x0 + 4*a1*ang1*k0**5*k1*ny*y0 - 10*a1*ang1*k0**4*k1**2*ny*y0 + 10*a1*ang1*k0**2*k1**4*ny*y0 - 4*a1*ang1*k0*k1**5*ny*y0 + 2*a0*a1*k1*(-2*k0**4 + 5*k0**3*k1 - 5*k0*k1**3 + 2*k1**4)*ny*np.cos(ang1*k0 + phi0) - 2*a0*a1*k0*k1*(2*k0**3 - k0**2*k1 - 2*k0*k1**2 + k1**3)*ny*np.cos(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 4*a0*k0**4*k1*ny*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**3*k1**2*ny*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 6*a0*k0**2*k1**3*ny*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 4*a0*k0*k1**4*ny*x0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0**4*k1*nx*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*y0*np.cos(ang1*k0 - ang1*k1 + phi0 - phi1) - 2*a0**2*k0**4*k1*ny*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**3*k1**2*ny*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 2*a0**2*k0**2*k1**3*ny*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 4*a0**2*k0*k1**4*ny*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*ny*np.cos(ang1*k1 + phi1) - 10*a0**2*k0**4*k1*ny*np.cos(ang1*k1 + phi1) + 10*a0**2*k0**2*k1**3*ny*np.cos(ang1*k1 + phi1) - 4*a0**2*k0*k1**4*ny*np.cos(ang1*k1 + phi1) + 2*a1*k0**5*ny*x0*np.cos(2*(ang1*k1 + phi1)) - 5*a1*k0**4*k1*ny*x0*np.cos(2*(ang1*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*x0*np.cos(2*(ang1*k1 + phi1)) - 2*a1*k0*k1**4*ny*x0*np.cos(2*(ang1*k1 + phi1)) - 2*a1*k0**5*nx*y0*np.cos(2*(ang1*k1 + phi1)) + 5*a1*k0**4*k1*nx*y0*np.cos(2*(ang1*k1 + phi1)) - 5*a1*k0**2*k1**3*nx*y0*np.cos(2*(ang1*k1 + phi1)) + 2*a1*k0*k1**4*nx*y0*np.cos(2*(ang1*k1 + phi1)) + 4*a0*k0**4*k1*ny*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*x0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0**4*k1*nx*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**3*k1**2*nx*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**2*k1**3*nx*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 4*a0*k0*k1**4*nx*y0*np.cos(ang1*(k0 + k1) + phi0 + phi1) + 12*a0*a1*k0**4*k1*nx*np.sin(ang1*k0 + phi0) - 30*a0*a1*k0**3*k1**2*nx*np.sin(ang1*k0 + phi0) + 30*a0*a1*k0*k1**4*nx*np.sin(ang1*k0 + phi0) - 12*a0*a1*k1**5*nx*np.sin(ang1*k0 + phi0) + 8*a0*H*k0**4*k1*nz*np.sin(ang1*k0 + phi0) - 20*a0*H*k0**3*k1**2*nz*np.sin(ang1*k0 + phi0) + 20*a0*H*k0*k1**4*nz*np.sin(ang1*k0 + phi0) - 8*a0*H*k1**5*nz*np.sin(ang1*k0 + phi0) + 4*a0*a1*k0**4*k1*nx*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 2*a0*a1*k0**3*k1**2*nx*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) - 4*a0*a1*k0**2*k1**3*nx*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) + 2*a0*a1*k0*k1**4*nx*np.sin(ang1*k0 - 2*ang1*k1 + phi0 - 2*phi1) + 4*a0*k0**4*k1*nx*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*nx*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*nx*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0*k1**4*nx*x0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0**4*k1*ny*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**3*k1**2*ny*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) - 6*a0*k0**2*k1**3*ny*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 4*a0*k0*k1**4*ny*y0*np.sin(ang1*k0 - ang1*k1 + phi0 - phi1) + 2*a0**2*k0**4*k1*nx*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 4*a0**2*k0**3*k1**2*nx*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) - 2*a0**2*k0**2*k1**3*nx*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0*k1**4*nx*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1) + 4*a0**2*k0**5*nx*np.sin(ang1*k1 + phi1) + 8*a1**2*k0**5*nx*np.sin(ang1*k1 + phi1) - 10*a0**2*k0**4*k1*nx*np.sin(ang1*k1 + phi1) - 20*a1**2*k0**4*k1*nx*np.sin(ang1*k1 + phi1) + 10*a0**2*k0**2*k1**3*nx*np.sin(ang1*k1 + phi1) + 20*a1**2*k0**2*k1**3*nx*np.sin(ang1*k1 + phi1) - 4*a0**2*k0*k1**4*nx*np.sin(ang1*k1 + phi1) - 8*a1**2*k0*k1**4*nx*np.sin(ang1*k1 + phi1) + 8*a1*H*k0**5*nz*np.sin(ang1*k1 + phi1) - 20*a1*H*k0**4*k1*nz*np.sin(ang1*k1 + phi1) + 20*a1*H*k0**2*k1**3*nz*np.sin(ang1*k1 + phi1) - 8*a1*H*k0*k1**4*nz*np.sin(ang1*k1 + phi1) + 2*a1*k0**5*nx*x0*np.sin(2*(ang1*k1 + phi1)) - 5*a1*k0**4*k1*nx*x0*np.sin(2*(ang1*k1 + phi1)) + 5*a1*k0**2*k1**3*nx*x0*np.sin(2*(ang1*k1 + phi1)) - 2*a1*k0*k1**4*nx*x0*np.sin(2*(ang1*k1 + phi1)) + 2*a1*k0**5*ny*y0*np.sin(2*(ang1*k1 + phi1)) - 5*a1*k0**4*k1*ny*y0*np.sin(2*(ang1*k1 + phi1)) + 5*a1*k0**2*k1**3*ny*y0*np.sin(2*(ang1*k1 + phi1)) - 2*a1*k0*k1**4*ny*y0*np.sin(2*(ang1*k1 + phi1)) + 4*a0*k0**4*k1*nx*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*nx*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*nx*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*nx*x0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 4*a0*k0**4*k1*ny*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 14*a0*k0**3*k1**2*ny*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) + 14*a0*k0**2*k1**3*ny*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1) - 4*a0*k0*k1**4*ny*y0*np.sin(ang1*(k0 + k1) + phi0 + phi1))/(4.*k0*(k0 - 2*k1)*(k0 - k1)*(2*k0 - k1)*k1*(k0 + k1)))
+            return res1 - res0
+        elif j == 1:
+            res0 = (((-6*a0*a1*(nx*x0 + ny*y0)*np.cos(ang0*k0 + phi0))/k0 - (3*a0**2*(2*a1*nx + H*nz)*np.cos(2*(ang0*k0 + phi0)))/k0 + (3*a0*a1**2*nx*np.cos(ang0*k0 - 3*ang0*k1 + phi0 - 3*phi1))/(k0 - 3*k1) - (3*a0**2*nx*x0*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**2*ny*y0*np.cos(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**3*k0*nx*np.cos(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*nx*np.cos(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a1**2*nx*x0*np.cos(ang0*k1 + phi1))/k1 - (3*a1**2*ny*y0*np.cos(ang0*k1 + phi1))/k1 - (3*a0**2*a1*nx*np.cos(2*(ang0*k1 + phi1)))/k1 - (3*a1**3*nx*np.cos(2*(ang0*k1 + phi1)))/k1 - (3*a1**2*H*nz*np.cos(2*(ang0*k1 + phi1)))/k1 - (a1**2*nx*x0*np.cos(3*(ang0*k1 + phi1)))/k1 - (a1**2*ny*y0*np.cos(3*(ang0*k1 + phi1)))/k1 - (15*a0*a1**2*nx*np.cos(ang0*(k0 + k1) + phi0 + phi1))/(k0 + k1) - (9*a0**3*k0*nx*np.cos(ang0*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) + (3*a0**3*k1*nx*np.cos(ang0*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) - (12*a0*a1*H*nz*np.cos(ang0*(k0 + k1) + phi0 + phi1))/(k0 + k1) - (3*a0**2*nx*x0*np.cos(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (3*a0**2*ny*y0*np.cos(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (6*a0*a1*nx*x0*np.cos(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*ny*y0*np.cos(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*ny*x0*np.sin(ang0*k0 + phi0))/k0 + (6*a0*a1*nx*y0*np.sin(ang0*k0 + phi0))/k0 - (3*a0**2*a1*ny*np.sin(2*(ang0*k0 + phi0)))/k0 + (3*a0*a1**2*ny*np.sin(ang0*k0 - 3*ang0*k1 + phi0 - 3*phi1))/(k0 - 3*k1) - (3*a0**2*ny*x0*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) + (3*a0**2*nx*y0*np.sin(2*ang0*k0 - ang0*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**3*k0*ny*np.sin(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*ny*np.sin(3*ang0*k0 - ang0*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a1**2*ny*x0*np.sin(ang0*k1 + phi1))/k1 + (3*a1**2*nx*y0*np.sin(ang0*k1 + phi1))/k1 + (3*a0**2*a1*ny*np.sin(2*(ang0*k1 + phi1)))/k1 + (a1**2*ny*x0*np.sin(3*(ang0*k1 + phi1)))/k1 - (a1**2*nx*y0*np.sin(3*(ang0*k1 + phi1)))/k1 - (3*a0*a1**2*ny*np.sin(ang0*(k0 + k1) + phi0 + phi1))/(k0 + k1) + (9*a0**3*k0*ny*np.sin(ang0*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*ny*np.sin(ang0*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) + (3*a0**2*ny*x0*np.sin(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (3*a0**2*nx*y0*np.sin(2*ang0*k0 + ang0*k1 + 2*phi0 + phi1))/(2*k0 + k1) + (6*a0*a1*ny*x0*np.sin(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*nx*y0*np.sin(ang0*k0 + 2*ang0*k1 + phi0 + 2*phi1))/(k0 + 2*k1))/12.)
+            res1 = (((-6*a0*a1*(nx*x0 + ny*y0)*np.cos(ang1*k0 + phi0))/k0 - (3*a0**2*(2*a1*nx + H*nz)*np.cos(2*(ang1*k0 + phi0)))/k0 + (3*a0*a1**2*nx*np.cos(ang1*k0 - 3*ang1*k1 + phi0 - 3*phi1))/(k0 - 3*k1) - (3*a0**2*nx*x0*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**2*ny*y0*np.cos(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**3*k0*nx*np.cos(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*nx*np.cos(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a1**2*nx*x0*np.cos(ang1*k1 + phi1))/k1 - (3*a1**2*ny*y0*np.cos(ang1*k1 + phi1))/k1 - (3*a0**2*a1*nx*np.cos(2*(ang1*k1 + phi1)))/k1 - (3*a1**3*nx*np.cos(2*(ang1*k1 + phi1)))/k1 - (3*a1**2*H*nz*np.cos(2*(ang1*k1 + phi1)))/k1 - (a1**2*nx*x0*np.cos(3*(ang1*k1 + phi1)))/k1 - (a1**2*ny*y0*np.cos(3*(ang1*k1 + phi1)))/k1 - (15*a0*a1**2*nx*np.cos(ang1*(k0 + k1) + phi0 + phi1))/(k0 + k1) - (9*a0**3*k0*nx*np.cos(ang1*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) + (3*a0**3*k1*nx*np.cos(ang1*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) - (12*a0*a1*H*nz*np.cos(ang1*(k0 + k1) + phi0 + phi1))/(k0 + k1) - (3*a0**2*nx*x0*np.cos(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (3*a0**2*ny*y0*np.cos(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (6*a0*a1*nx*x0*np.cos(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*ny*y0*np.cos(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*ny*x0*np.sin(ang1*k0 + phi0))/k0 + (6*a0*a1*nx*y0*np.sin(ang1*k0 + phi0))/k0 - (3*a0**2*a1*ny*np.sin(2*(ang1*k0 + phi0)))/k0 + (3*a0*a1**2*ny*np.sin(ang1*k0 - 3*ang1*k1 + phi0 - 3*phi1))/(k0 - 3*k1) - (3*a0**2*ny*x0*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) + (3*a0**2*nx*y0*np.sin(2*ang1*k0 - ang1*k1 + 2*phi0 - phi1))/(2*k0 - k1) - (3*a0**3*k0*ny*np.sin(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*ny*np.sin(3*ang1*k0 - ang1*k1 + 3*phi0 - phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a1**2*ny*x0*np.sin(ang1*k1 + phi1))/k1 + (3*a1**2*nx*y0*np.sin(ang1*k1 + phi1))/k1 + (3*a0**2*a1*ny*np.sin(2*(ang1*k1 + phi1)))/k1 + (a1**2*ny*x0*np.sin(3*(ang1*k1 + phi1)))/k1 - (a1**2*nx*y0*np.sin(3*(ang1*k1 + phi1)))/k1 - (3*a0*a1**2*ny*np.sin(ang1*(k0 + k1) + phi0 + phi1))/(k0 + k1) + (9*a0**3*k0*ny*np.sin(ang1*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) - (3*a0**3*k1*ny*np.sin(ang1*(k0 + k1) + phi0 + phi1))/((3*k0 - k1)*(k0 + k1)) + (3*a0**2*ny*x0*np.sin(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) - (3*a0**2*nx*y0*np.sin(2*ang1*k0 + ang1*k1 + 2*phi0 + phi1))/(2*k0 + k1) + (6*a0*a1*ny*x0*np.sin(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1) - (6*a0*a1*nx*y0*np.sin(ang1*k0 + 2*ang1*k1 + phi0 + 2*phi1))/(k0 + 2*k1))/12.)
+            return res1 - res0
+        else:
+            print('invalid index j = ' + str(j) + ' in Iij_c')
+            return 0.0
+    else:
+        print('invalid index i = ' + str(i) + ' in Iij_c')
+        return 0.0
     
 @njit(cache=True)
 def integrate(F, z, a0, a1): #F = F_matrix[p, q]
