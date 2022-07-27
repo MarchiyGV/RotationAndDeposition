@@ -85,7 +85,7 @@ class Model(QObject):
                  NR_min, NR_max, omega_s_max, omega_p_max, x0_1, x0_2, x0_3,
                  minimizer, R_mc_interval, k_mc_interval, NR_mc_interval,
                  R_min_step, k_min_step, NR_min_step, mc_iter, T, smooth, 
-                 spline_order, debug=True):
+                 spline_order, normal, debug=True):
         
         self.smooth = smooth
         self.spline_order = spline_order
@@ -99,6 +99,7 @@ class Model(QObject):
         self.source = source
         self.alpha0_sub = 0*pi
         self.substrate_shape = substrate_shape
+        self.normal = normal
         if substrate_shape == 'Circle':
             self.substrate_radius = substrate_radius
             substrate_x_len = substrate_radius*2
@@ -542,6 +543,7 @@ class Deposition(QThread):
         self.workers[0].progress_signal.connect(self.progress)
         self.workers[0].msg_signal.connect(self.msg)
         self.workers[0].debug_signal.connect(self.debug)
+        self.normal = self.model.normal
         
     @pyqtSlot()
     def progress(self):
@@ -613,14 +615,14 @@ class Deposition(QThread):
                      len(self.ind), self.rho, self.alpha, self.model.F_matrix,
                      self.tolerance)
         '''
-        n = np.array([3, 0, 1])
+        #n = np.array([3, 0, 1])
         H = 50
         x0 = -100
         y0 = 0
         print('calc curvature...')
         hs = self.do_c(self.R, self.k, self.NR, self.alpha0_sub, xs, ys,
                      len(self.ind), self.rho, self.alpha, self.model.F_matrix,
-                     self.tolerance, n, x0, y0, H)
+                     self.tolerance, self.normal, x0, y0, H)
         #print('curvature error: ', np.max(np.abs(hs_c-hs))/np.mean(hs))
         self.hs = np.array(hs)/(2*pi*self.omega)
         if self.debug_flag:
@@ -860,7 +862,7 @@ class Deposition(QThread):
                 
             breaks_K_a = breaks_K_a[:len_breaks_K_a]
             breaks_K_b = breaks_K_b[:len_breaks_K_a]
-            print('intervals without shading:', breaks_K_a, breaks_K_b)
+            #print('intervals without shading:', breaks_K_a, breaks_K_b)
             '''integration'''
             I = np.zeros((len(ni)))
             for j in range(I.shape[0]):

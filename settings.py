@@ -200,6 +200,13 @@ class Settings(QAbstractTableModel):
         elif value_type == 'filename':
             value = str(value)
             flag = os.path.exists(value)
+        elif value_type == 'vector':
+            value = str(value)
+            value = np.array(list(map(float, value.split(';'))))
+            if len(value) > 0:
+                flag = True
+            else:
+                flag = False
         else:
             flag = False
         return value, flag 
